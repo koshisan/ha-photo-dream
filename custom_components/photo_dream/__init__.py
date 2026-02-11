@@ -296,11 +296,14 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
             ip = device.get(CONF_DEVICE_IP)
             port = device.get(CONF_DEVICE_PORT, DEFAULT_PORT)
             
+            _LOGGER.debug("Device %s config: ip=%s, port=%s, full=%s", device_id, ip, port, device)
+            
             if not ip:
                 _LOGGER.error("No IP for device %s", device_id)
                 return False
             
             url = f"http://{ip}:{port}/configure"
+            _LOGGER.info("Pushing config to device %s at %s", device_id, url)
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.post(url, json=config, timeout=10) as resp:
@@ -308,7 +311,9 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
                             _LOGGER.info("Config pushed to device %s", device_id)
                             return True
                         else:
-                            _LOGGER.error("Failed to push config to %s: %s", device_id, resp.status)
+                            _LOGGER.error("Failed to push config to %s: HTTP %s", device_id, resp.status)
+            except aiohttp.ClientConnectorError as e:
+                _LOGGER.error("Cannot connect to device %s at %s: %s", device_id, url, e)
             except Exception as e:
                 _LOGGER.error("Error pushing config to %s: %s", device_id, e)
     

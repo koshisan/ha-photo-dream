@@ -304,6 +304,8 @@ class PhotoDreamOptionsFlow(OptionsFlow):
         self.config_entry = config_entry
         self._profiles = dict(config_entry.data.get(CONF_PROFILES, {}))
         self._devices = dict(config_entry.data.get(CONF_DEVICES, {}))
+        self._editing_profile: str | None = None
+        self._editing_device: str | None = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
