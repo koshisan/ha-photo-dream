@@ -95,9 +95,12 @@ async def handle_register_webhook(
 ) -> aiohttp.web.Response:
     """Handle device registration webhook (discovery)."""
     try:
-        # Handle GET - device polling for config
-        if request.method == "GET":
-            device_id = request.query.get("device_id")
+        # Handle POST only (HA webhooks don't support GET)
+        data = await request.json()
+        
+        # Check if this is a poll request
+        if data.get("action") == "poll":
+            device_id = data.get("device_id")
             if not device_id:
                 return aiohttp.web.json_response({"status": "error", "message": "Missing device_id"}, status=400)
             
@@ -115,8 +118,7 @@ async def handle_register_webhook(
             
             return aiohttp.web.json_response({"status": "unknown"})
         
-        # Handle POST - device registration
-        data = await request.json()
+        # Handle device registration
         device_id = data.get("device_id")
         device_ip = data.get("device_ip")
         device_port = data.get("device_port", DEFAULT_PORT)
