@@ -11,10 +11,10 @@
       },
       "profile": {
         "title": "Create Profile",
-        "description": "Create a photo filter profile. You can add more profiles later in the integration options.\n\nProfiles created: {profile_count}",
+        "description": "Create a photo filter profile. You can add more profiles later in the integration options.\n\nProfiles created: {profile_count}\n\nTip: Build your search in Immich UI, then copy the URL or JSON query.",
         "data": {
           "name": "Profile Name",
-          "search_queries": "Search Queries (comma-separated)",
+          "search_filter": "Immich Search (URL, JSON, or simple query)",
           "exclude_paths": "Exclude Paths (comma-separated)",
           "add_another": "Add another profile"
         }
@@ -61,9 +61,10 @@
       },
       "add_profile": {
         "title": "Add Profile",
+        "description": "Tip: Build your search in Immich UI, then copy the URL.",
         "data": {
           "name": "Profile Name",
-          "search_queries": "Search Queries (comma-separated)",
+          "search_filter": "Immich Search (URL, JSON, or simple query)",
           "exclude_paths": "Exclude Paths (comma-separated)"
         }
       },
@@ -76,7 +77,7 @@
       "edit_profile": {
         "title": "Edit Profile: {profile_name}",
         "data": {
-          "search_queries": "Search Queries (comma-separated)",
+          "search_filter": "Immich Search (URL, JSON, or simple query)",
           "exclude_paths": "Exclude Paths (comma-separated)"
         }
       },

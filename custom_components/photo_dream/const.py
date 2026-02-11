@@ -27,7 +27,8 @@ CONF_DISPLAY_MODE: Final = "display_mode"
 
 # Profile config keys
 CONF_PROFILE_NAME: Final = "name"
-CONF_SEARCH_QUERIES: Final = "search_queries"
+CONF_SEARCH_QUERIES: Final = "search_queries"  # Legacy
+CONF_SEARCH_FILTER: Final = "search_filter"  # New: JSON object or Immich URL
 CONF_EXCLUDE_PATHS: Final = "exclude_paths"
 
 # Defaults

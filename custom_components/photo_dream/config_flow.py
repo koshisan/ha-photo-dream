@@ -23,6 +23,7 @@ from .const import (
     CONF_DEVICE_PORT,
     CONF_PROFILE_NAME,
     CONF_SEARCH_QUERIES,
+    CONF_SEARCH_FILTER,
     CONF_EXCLUDE_PATHS,
     CONF_CLOCK,
     CONF_CLOCK_POSITION,
@@ -35,8 +36,50 @@ from .const import (
     DEFAULT_INTERVAL,
     CLOCK_POSITIONS,
 )
+import json
+from urllib.parse import urlparse, parse_qs, unquote
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def parse_immich_search_input(input_str: str) -> dict:
+    """Parse Immich search URL or JSON into a search filter dict.
+    
+    Accepts:
+    - Full URL: https://immich.example.com/search?query=%7B%22query%22%3A%22test%22%7D
+    - Query param only: %7B%22query%22%3A%22test%22%7D
+    - Raw JSON: {"query":"test"}
+    """
+    input_str = input_str.strip()
+    
+    # Try to parse as URL first
+    if input_str.startswith("http"):
+        try:
+            parsed = urlparse(input_str)
+            query_params = parse_qs(parsed.query)
+            if "query" in query_params:
+                # URL-decode and parse JSON
+                json_str = unquote(query_params["query"][0])
+                return json.loads(json_str)
+        except Exception as e:
+            _LOGGER.debug("Failed to parse as URL: %s", e)
+    
+    # Try to URL-decode if it looks encoded
+    if "%7B" in input_str or "%22" in input_str:
+        try:
+            decoded = unquote(input_str)
+            return json.loads(decoded)
+        except Exception as e:
+            _LOGGER.debug("Failed to parse as URL-encoded JSON: %s", e)
+    
+    # Try to parse as raw JSON
+    try:
+        return json.loads(input_str)
+    except Exception as e:
+        _LOGGER.debug("Failed to parse as JSON: %s", e)
+    
+    # Fallback: treat as simple query string
+    return {"query": input_str}
 
 
 class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -94,15 +137,17 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle adding initial profile."""
         if user_input is not None:
             profile_name = user_input[CONF_PROFILE_NAME]
-            search_queries = [
-                q.strip() for q in user_input[CONF_SEARCH_QUERIES].split(",") if q.strip()
-            ]
+            
+            # Parse search filter (URL, URL-encoded JSON, or raw JSON)
+            search_input = user_input.get(CONF_SEARCH_FILTER, "")
+            search_filter = parse_immich_search_input(search_input) if search_input else {}
+            
             exclude_paths = [
                 p.strip() for p in user_input.get(CONF_EXCLUDE_PATHS, "").split(",") if p.strip()
             ]
             
             self._data[CONF_PROFILES][profile_name] = {
-                CONF_SEARCH_QUERIES: search_queries,
+                CONF_SEARCH_FILTER: search_filter,
                 CONF_EXCLUDE_PATHS: exclude_paths,
             }
             
@@ -120,7 +165,7 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_PROFILE_NAME, default="default"): str,
-                    vol.Required(CONF_SEARCH_QUERIES, default="family, vacation"): str,
+                    vol.Required(CONF_SEARCH_FILTER, default=""): str,
                     vol.Optional(CONF_EXCLUDE_PATHS, default="/Private/*"): str,
                     vol.Optional("add_another", default=False): bool,
                 }
@@ -304,11 +349,12 @@ class PhotoDreamOptionsFlow(OptionsFlow):
         """Add a new profile."""
         if user_input is not None:
             profile_name = user_input[CONF_PROFILE_NAME]
-            search_queries = [q.strip() for q in user_input[CONF_SEARCH_QUERIES].split(",") if q.strip()]
+            search_input = user_input.get(CONF_SEARCH_FILTER, "")
+            search_filter = parse_immich_search_input(search_input) if search_input else {}
             exclude_paths = [p.strip() for p in user_input.get(CONF_EXCLUDE_PATHS, "").split(",") if p.strip()]
             
             self._profiles[profile_name] = {
-                CONF_SEARCH_QUERIES: search_queries,
+                CONF_SEARCH_FILTER: search_filter,
                 CONF_EXCLUDE_PATHS: exclude_paths,
             }
             
@@ -319,7 +365,7 @@ class PhotoDreamOptionsFlow(OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_PROFILE_NAME): str,
-                    vol.Required(CONF_SEARCH_QUERIES): str,
+                    vol.Required(CONF_SEARCH_FILTER): str,
                     vol.Optional(CONF_EXCLUDE_PATHS, default=""): str,
                 }
             ),
@@ -353,23 +399,28 @@ class PhotoDreamOptionsFlow(OptionsFlow):
         profile = self._profiles.get(profile_name, {})
         
         if user_input is not None:
-            search_queries = [q.strip() for q in user_input[CONF_SEARCH_QUERIES].split(",") if q.strip()]
+            search_input = user_input.get(CONF_SEARCH_FILTER, "")
+            search_filter = parse_immich_search_input(search_input) if search_input else {}
             exclude_paths = [p.strip() for p in user_input.get(CONF_EXCLUDE_PATHS, "").split(",") if p.strip()]
             
             self._profiles[profile_name] = {
-                CONF_SEARCH_QUERIES: search_queries,
+                CONF_SEARCH_FILTER: search_filter,
                 CONF_EXCLUDE_PATHS: exclude_paths,
             }
             
             return await self._save_and_finish()
 
+        # Convert existing filter back to JSON string for editing
+        existing_filter = profile.get(CONF_SEARCH_FILTER, {})
+        filter_str = json.dumps(existing_filter) if existing_filter else ""
+        
         return self.async_show_form(
             step_id="edit_profile",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_SEARCH_QUERIES,
-                        default=", ".join(profile.get(CONF_SEARCH_QUERIES, []))
+                        CONF_SEARCH_FILTER,
+                        default=filter_str
                     ): str,
                     vol.Optional(
                         CONF_EXCLUDE_PATHS,

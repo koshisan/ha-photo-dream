@@ -269,7 +269,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
                 },
                 "profile": {
                     "name": profile_name,
-                    "search_queries": profile.get("search_queries", []),
+                    "search_filter": profile.get("search_filter", {}),
                     "exclude_paths": profile.get("exclude_paths", []),
                 },
                 "webhook_url": status_webhook_url,
