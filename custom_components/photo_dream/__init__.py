@@ -32,7 +32,14 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SELECT]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.SELECT,
+    Platform.BUTTON,
+    Platform.SWITCH,
+    Platform.NUMBER,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -197,10 +204,15 @@ async def handle_status_webhook(
                 # Store device status
                 entry_data["devices"][device_id] = {
                     "online": data.get("online", True),
+                    "active": data.get("active", False),
                     "current_image": data.get("current_image"),
                     "current_image_url": data.get("current_image_url"),
                     "profile": data.get("profile"),
                     "last_seen": data.get("last_refresh"),
+                    "mac_address": data.get("mac_address"),
+                    "ip_address": data.get("ip_address"),
+                    "display_width": data.get("display_width"),
+                    "display_height": data.get("display_height"),
                 }
                 
                 # Fire event for entity updates

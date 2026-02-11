@@ -18,6 +18,10 @@ from .const import (
     ATTR_CURRENT_IMAGE_URL,
     ATTR_PROFILE,
     ATTR_LAST_SEEN,
+    ATTR_MAC_ADDRESS,
+    ATTR_IP_ADDRESS,
+    ATTR_DISPLAY_WIDTH,
+    ATTR_DISPLAY_HEIGHT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,6 +39,9 @@ async def async_setup_entry(
     entities = []
     for device_id, device_config in devices.items():
         entities.append(PhotoDreamCurrentImageSensor(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamMacAddressSensor(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamIpAddressSensor(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamResolutionSensor(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -105,5 +112,158 @@ class PhotoDreamCurrentImageSensor(SensorEntity):
     @callback
     def _handle_device_update(self, event) -> None:
         """Handle device update event."""
+        if event.data.get("device_id") == self._device_id:
+            self.async_write_ha_state()
+
+
+class PhotoDreamMacAddressSensor(SensorEntity):
+    """Sensor showing MAC address of a PhotoDream device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "MAC Address"
+    _attr_icon = "mdi:ethernet"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the sensor."""
+        self.hass = hass
+        self._entry = entry
+        self._device_id = device_id
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_mac_address"
+        
+        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
+            name=f"PhotoDream {device_name}",
+            manufacturer="PhotoDream",
+            model="Android Tablet",
+        )
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the MAC address."""
+        device_data = self._get_device_data()
+        return device_data.get(ATTR_MAC_ADDRESS) if device_data else None
+
+    def _get_device_data(self) -> dict | None:
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get("devices", {}).get(self._device_id)
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self.hass.bus.async_listen(f"{DOMAIN}_device_update", self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, event) -> None:
+        if event.data.get("device_id") == self._device_id:
+            self.async_write_ha_state()
+
+
+class PhotoDreamIpAddressSensor(SensorEntity):
+    """Sensor showing IP address of a PhotoDream device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "IP Address"
+    _attr_icon = "mdi:ip-network"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the sensor."""
+        self.hass = hass
+        self._entry = entry
+        self._device_id = device_id
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_ip_address"
+        
+        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
+            name=f"PhotoDream {device_name}",
+            manufacturer="PhotoDream",
+            model="Android Tablet",
+        )
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the IP address."""
+        device_data = self._get_device_data()
+        return device_data.get(ATTR_IP_ADDRESS) if device_data else None
+
+    def _get_device_data(self) -> dict | None:
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get("devices", {}).get(self._device_id)
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self.hass.bus.async_listen(f"{DOMAIN}_device_update", self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, event) -> None:
+        if event.data.get("device_id") == self._device_id:
+            self.async_write_ha_state()
+
+
+class PhotoDreamResolutionSensor(SensorEntity):
+    """Sensor showing display resolution of a PhotoDream device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Display Resolution"
+    _attr_icon = "mdi:monitor"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the sensor."""
+        self.hass = hass
+        self._entry = entry
+        self._device_id = device_id
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_resolution"
+        
+        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
+            name=f"PhotoDream {device_name}",
+            manufacturer="PhotoDream",
+            model="Android Tablet",
+        )
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the resolution as WxH."""
+        device_data = self._get_device_data()
+        if not device_data:
+            return None
+        width = device_data.get(ATTR_DISPLAY_WIDTH)
+        height = device_data.get(ATTR_DISPLAY_HEIGHT)
+        if width and height:
+            return f"{width}x{height}"
+        return None
+
+    def _get_device_data(self) -> dict | None:
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get("devices", {}).get(self._device_id)
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self.hass.bus.async_listen(f"{DOMAIN}_device_update", self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, event) -> None:
         if event.data.get("device_id") == self._device_id:
             self.async_write_ha_state()

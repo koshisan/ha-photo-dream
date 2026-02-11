@@ -59,7 +59,15 @@ ATTR_PROFILE: Final = "profile"
 ATTR_CURRENT_IMAGE: Final = "current_image"
 ATTR_CURRENT_IMAGE_URL: Final = "current_image_url"
 ATTR_LAST_SEEN: Final = "last_seen"
+ATTR_ACTIVE: Final = "active"
+ATTR_MAC_ADDRESS: Final = "mac_address"
+ATTR_IP_ADDRESS: Final = "ip_address"
+ATTR_DISPLAY_WIDTH: Final = "display_width"
+ATTR_DISPLAY_HEIGHT: Final = "display_height"
 
 # Webhooks
 WEBHOOK_REGISTER: Final = "photo_dream_register"
 WEBHOOK_STATUS: Final = "photo_dream_status"
+
+# Global config
+CONF_WEATHER_ENTITY: Final = "weather_entity"
