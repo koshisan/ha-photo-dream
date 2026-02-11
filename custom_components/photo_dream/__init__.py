@@ -300,6 +300,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
                     "clock": device.get("clock", True),
                     "clock_position": device.get("clock_position", 3),
                     "clock_format": device.get("clock_format", "24h"),
+                    "clock_font_size": device.get("clock_font_size", 32),
                     "weather": device.get("weather", False),
                     "interval_seconds": device.get("interval_seconds", 30),
                     "pan_speed": device.get("pan_speed", 0.5),
