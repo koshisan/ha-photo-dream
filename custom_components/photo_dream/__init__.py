@@ -47,10 +47,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up PhotoDream from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     
-    # Store config data
+    # Store reference to entry and runtime data
+    # NOTE: Don't copy entry.data - always access entry.data directly
+    # to get the latest values after entity updates
     hass.data[DOMAIN][entry.entry_id] = {
-        "config": dict(entry.data),
-        "options": dict(entry.options),
+        "entry": entry,  # Store reference to entry for direct data access
         "devices": {},  # Runtime device status
         "pending_devices": {},  # Devices waiting for approval
     }
@@ -143,7 +144,7 @@ async def handle_register_webhook(
         for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
             if isinstance(entry_data, dict) and "pending_devices" in entry_data:
                 # Check if already configured
-                devices = entry_data.get("config", {}).get(CONF_DEVICES, {})
+                devices = entry_data.get("entry").data.get(CONF_DEVICES, {}) if entry_data.get("entry") else {}
                 if device_id in devices:
                     # Already configured - return config
                     config = await get_device_config(hass, device_id)
@@ -270,11 +271,15 @@ async def _update_device_mac(
 async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     """Get configuration for a specific device."""
     for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
-        if not isinstance(entry_data, dict) or "config" not in entry_data:
+        if not isinstance(entry_data, dict):
+            continue
+        
+        entry = entry_data.get("entry")
+        if not entry:
             continue
             
-        config = entry_data["config"]
-        options = entry_data.get("options", {})
+        config = entry.data
+        options = entry.options
         devices = config.get(CONF_DEVICES, {})
         
         # Merge options into config (options override config)
@@ -329,7 +334,7 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
         if not isinstance(entry_data, dict):
             continue
         
-        devices = entry_data.get("config", {}).get(CONF_DEVICES, {})
+        devices = entry_data.get("entry").data.get(CONF_DEVICES, {}) if entry_data.get("entry") else {}
         if device_id in devices:
             device = devices[device_id]
             ip = device.get(CONF_DEVICE_IP)
@@ -381,7 +386,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
             if not isinstance(entry_data, dict):
                 continue
-            devices = entry_data.get("config", {}).get(CONF_DEVICES, {})
+            devices = entry_data.get("entry").data.get(CONF_DEVICES, {}) if entry_data.get("entry") else {}
             if device_id in devices:
                 devices[device_id]["profile"] = profile
                 # Push new config
@@ -398,11 +403,14 @@ async def send_command_to_device(
 ) -> bool:
     """Send a command to a PhotoDream device."""
     for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
-        if not isinstance(entry_data, dict) or "config" not in entry_data:
+        if not isinstance(entry_data, dict):
+            continue
+        
+        entry = entry_data.get("entry")
+        if not entry:
             continue
             
-        config = entry_data["config"]
-        devices = config.get(CONF_DEVICES, {})
+        devices = entry.data.get(CONF_DEVICES, {})
         
         if device_id in devices:
             device = devices[device_id]
