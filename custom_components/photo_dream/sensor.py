@@ -77,18 +77,26 @@ class PhotoDreamCurrentImageSensor(SensorEntity):
 
     @property
     def native_value(self) -> str | None:
-        """Return the proxy URL for the current image.
+        """Return the Immich web URL for the current image.
         
-        This URL can be used directly in HA dashboards to display the image
-        without needing Immich authentication.
+        Clicking this URL opens the photo in Immich's web interface.
         """
-        # Build proxy URL from device IP
-        ip = self._device_config.get("device_ip")
-        port = self._device_config.get("device_port", 8080)
+        device_data = self._get_device_data()
+        if not device_data:
+            return None
         
-        if ip:
-            return f"http://{ip}:{port}/current-image"
-        return None
+        image_id = device_data.get(ATTR_CURRENT_IMAGE)
+        if not image_id:
+            return None
+        
+        # Get Immich base URL from config
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        config = entry_data.get("config", {})
+        immich_url = config.get("immich_url", "").rstrip("/")
+        
+        if immich_url:
+            return f"{immich_url}/photos/{image_id}"
+        return image_id
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -99,7 +107,7 @@ class PhotoDreamCurrentImageSensor(SensorEntity):
         
         return {
             "image_id": device_data.get(ATTR_CURRENT_IMAGE),
-            ATTR_CURRENT_IMAGE_URL: device_data.get(ATTR_CURRENT_IMAGE_URL),
+            "api_url": device_data.get(ATTR_CURRENT_IMAGE_URL),
             ATTR_PROFILE: device_data.get(ATTR_PROFILE),
             ATTR_LAST_SEEN: device_data.get(ATTR_LAST_SEEN),
         }
