@@ -10,6 +10,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.components import webhook
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, format_mac
 
 from .const import (
     DOMAIN,
@@ -215,6 +216,11 @@ async def handle_status_webhook(
                     "display_height": data.get("display_height"),
                 }
                 
+                # Update device registry with MAC address for network matching
+                mac_address = data.get("mac_address")
+                if mac_address:
+                    await _update_device_mac(hass, entry_id, device_id, mac_address)
+                
                 # Fire event for entity updates
                 hass.bus.async_fire(
                     f"{DOMAIN}_device_update",
@@ -227,6 +233,38 @@ async def handle_status_webhook(
     except Exception as e:
         _LOGGER.error("Error handling status webhook: %s", e)
         return aiohttp.web.Response(status=500, text=str(e))
+
+
+async def _update_device_mac(
+    hass: HomeAssistant, entry_id: str, device_id: str, mac_address: str
+) -> None:
+    """Update device registry with MAC address for network integration matching."""
+    try:
+        formatted_mac = format_mac(mac_address)
+        device_registry = dr.async_get(hass)
+        
+        # Find the device by identifier
+        device = device_registry.async_get_device(
+            identifiers={(DOMAIN, f"{entry_id}_{device_id}")}
+        )
+        
+        if device:
+            # Check if MAC is already registered
+            mac_connection = (CONNECTION_NETWORK_MAC, formatted_mac)
+            if mac_connection not in device.connections:
+                # Add MAC as connection
+                new_connections = set(device.connections)
+                new_connections.add(mac_connection)
+                device_registry.async_update_device(
+                    device.id,
+                    new_connections=new_connections,
+                )
+                _LOGGER.info(
+                    "Updated device %s with MAC address %s for network matching",
+                    device_id, formatted_mac
+                )
+    except Exception as e:
+        _LOGGER.debug("Could not update device MAC: %s", e)
 
 
 async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
