@@ -204,6 +204,9 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 if isinstance(entry_data, dict) and "pending_devices" in entry_data:
                     entry_data["pending_devices"].pop(device_id, None)
             
+            # Reload integration to create entities for new device
+            await self.hass.config_entries.async_reload(entry.entry_id)
+            
             return self.async_abort(reason="device_configured")
 
         return self.async_show_form(
