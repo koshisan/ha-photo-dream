@@ -159,7 +159,7 @@ class PhotoDreamClockFontSizeNumber(NumberEntity):
     _attr_name = "Clock Font Size"
     _attr_icon = "mdi:format-size"
     _attr_native_min_value = 12
-    _attr_native_max_value = 120
+    _attr_native_max_value = 200
     _attr_native_step = 2
     _attr_native_unit_of_measurement = "sp"
     _attr_mode = NumberMode.SLIDER
