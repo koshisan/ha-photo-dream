@@ -11,12 +11,12 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
+from .helpers import get_device_info
 
 from .const import (
     DOMAIN,
     CONF_DEVICES,
-    CONF_DEVICE_NAME,
+    
     ATTR_LAST_SEEN,
 )
 
@@ -64,13 +64,7 @@ class PhotoDreamOnlineSensor(BinarySensorEntity):
         self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_online"
         
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def is_on(self) -> bool:
@@ -133,13 +127,7 @@ class PhotoDreamActiveSensor(BinarySensorEntity):
         self._device_id = device_id
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_active"
         
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def is_on(self) -> bool:

@@ -8,12 +8,10 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
 
 from .const import (
     DOMAIN,
     CONF_DEVICES,
-    CONF_DEVICE_NAME,
     ATTR_CURRENT_IMAGE,
     ATTR_CURRENT_IMAGE_URL,
     ATTR_PROFILE,
@@ -23,6 +21,7 @@ from .const import (
     ATTR_DISPLAY_WIDTH,
     ATTR_DISPLAY_HEIGHT,
 )
+from .helpers import get_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,14 +65,7 @@ class PhotoDreamCurrentImageSensor(SensorEntity):
         self._device_id = device_id
         self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_current_image"
-        
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def native_value(self) -> str | None:
@@ -152,15 +144,9 @@ class PhotoDreamMacAddressSensor(SensorEntity):
         self.hass = hass
         self._entry = entry
         self._device_id = device_id
+        self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_mac_address"
-        
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def native_value(self) -> str | None:
@@ -201,15 +187,9 @@ class PhotoDreamIpAddressSensor(SensorEntity):
         self.hass = hass
         self._entry = entry
         self._device_id = device_id
+        self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_ip_address"
-        
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def native_value(self) -> str | None:
@@ -250,15 +230,9 @@ class PhotoDreamResolutionSensor(SensorEntity):
         self.hass = hass
         self._entry = entry
         self._device_id = device_id
+        self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_resolution"
-        
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def native_value(self) -> str | None:

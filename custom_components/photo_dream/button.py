@@ -7,13 +7,11 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
-
 from .const import (
     DOMAIN,
     CONF_DEVICES,
-    CONF_DEVICE_NAME,
 )
+from .helpers import get_device_info
 from . import send_command_to_device
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,14 +53,7 @@ class PhotoDreamNextImageButton(ButtonEntity):
         self._device_id = device_id
         self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_next_image"
-        
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     async def async_press(self) -> None:
         """Handle the button press."""

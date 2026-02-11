@@ -8,13 +8,13 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
+from .helpers import get_device_info
 
 from .const import (
     DOMAIN,
     CONF_DEVICES,
     CONF_PROFILES,
-    CONF_DEVICE_NAME,
+    
     CONF_CLOCK_POSITION,
     CONF_CLOCK_FORMAT,
     CONF_DISPLAY_MODE,
@@ -73,13 +73,7 @@ class PhotoDreamProfileSelect(SelectEntity):
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_profile"
         self._attr_options = profiles if profiles else ["default"]
         
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def current_option(self) -> str | None:
@@ -155,13 +149,7 @@ class PhotoDreamClockPositionSelect(SelectEntity):
         self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_clock_position"
         
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def current_option(self) -> str | None:
@@ -214,13 +202,7 @@ class PhotoDreamClockFormatSelect(SelectEntity):
         self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_clock_format"
         
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def current_option(self) -> str | None:
@@ -268,13 +250,7 @@ class PhotoDreamDisplayModeSelect(SelectEntity):
         self._device_config = device_config
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_display_mode"
         
-        device_name = device_config.get(CONF_DEVICE_NAME, device_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-            name=f"PhotoDream {device_name}",
-            manufacturer="PhotoDream",
-            model="Android Tablet",
-        )
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
 
     @property
     def current_option(self) -> str | None:
