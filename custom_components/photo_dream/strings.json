@@ -39,7 +39,8 @@
       "single_instance_allowed": "PhotoDream is already configured. Use options to manage profiles and devices.",
       "device_configured": "Device has been configured and will start showing photos.",
       "no_device": "No device information available.",
-      "no_config": "Please configure PhotoDream integration first."
+      "no_config": "Please configure PhotoDream integration first.",
+      "already_configured": "This device is already configured."
     }
   },
   "options": {

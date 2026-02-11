@@ -176,12 +176,18 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_discovery(
-        self, discovery_info: dict[str, Any]
+        self, discovery_info: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle device discovery."""
-        device_id = discovery_info["device_id"]
-        device_ip = discovery_info["device_ip"]
+        if discovery_info is None:
+            return self.async_abort(reason="no_device")
+        
+        device_id = discovery_info.get("device_id")
+        device_ip = discovery_info.get("device_ip")
         device_port = discovery_info.get("device_port", DEFAULT_PORT)
+        
+        if not device_id or not device_ip:
+            return self.async_abort(reason="no_device")
         
         # Store discovered device info
         self._discovered_device = {
@@ -192,7 +198,12 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
         
         # Set unique ID to prevent duplicate flows
         await self.async_set_unique_id(f"photodream_{device_id}")
-        self._abort_if_unique_id_configured()
+        
+        # Check if already configured - abort if so
+        if self.unique_id:
+            for entry in self._async_current_entries():
+                if entry.data.get(CONF_DEVICES, {}).get(device_id):
+                    return self.async_abort(reason="already_configured")
         
         # Show confirmation
         self.context["title_placeholders"] = {"device_id": device_id}
@@ -301,11 +312,21 @@ class PhotoDreamOptionsFlow(OptionsFlow):
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        # Note: self.config_entry is set automatically by parent class in newer HA
+        self._config_entry = config_entry
         self._profiles = dict(config_entry.data.get(CONF_PROFILES, {}))
         self._devices = dict(config_entry.data.get(CONF_DEVICES, {}))
         self._editing_profile: str | None = None
         self._editing_device: str | None = None
+    
+    @property
+    def _entry(self) -> ConfigEntry:
+        """Get config entry (compatible with different HA versions)."""
+        # Try the automatic property first, fall back to our stored reference
+        try:
+            return self.config_entry
+        except AttributeError:
+            return self._config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -562,12 +583,12 @@ class PhotoDreamOptionsFlow(OptionsFlow):
         """Edit Immich settings."""
         if user_input is not None:
             # Update immich settings in data
-            new_data = dict(self.config_entry.data)
+            new_data = dict(self._entry.data)
             new_data[CONF_IMMICH_URL] = user_input[CONF_IMMICH_URL].rstrip("/")
             new_data[CONF_IMMICH_API_KEY] = user_input[CONF_IMMICH_API_KEY]
             
             self.hass.config_entries.async_update_entry(
-                self.config_entry,
+                self._entry,
                 data=new_data,
             )
             return self.async_create_entry(title="", data={})
@@ -578,11 +599,11 @@ class PhotoDreamOptionsFlow(OptionsFlow):
                 {
                     vol.Required(
                         CONF_IMMICH_URL,
-                        default=self.config_entry.data.get(CONF_IMMICH_URL, "")
+                        default=self._entry.data.get(CONF_IMMICH_URL, "")
                     ): str,
                     vol.Required(
                         CONF_IMMICH_API_KEY,
-                        default=self.config_entry.data.get(CONF_IMMICH_API_KEY, "")
+                        default=self._entry.data.get(CONF_IMMICH_API_KEY, "")
                     ): str,
                 }
             ),
@@ -590,12 +611,12 @@ class PhotoDreamOptionsFlow(OptionsFlow):
 
     async def _save_and_finish(self) -> ConfigFlowResult:
         """Save profiles and devices, then finish."""
-        new_data = dict(self.config_entry.data)
+        new_data = dict(self._entry.data)
         new_data[CONF_PROFILES] = self._profiles
         new_data[CONF_DEVICES] = self._devices
         
         self.hass.config_entries.async_update_entry(
-            self.config_entry,
+            self._entry,
             data=new_data,
         )
         
