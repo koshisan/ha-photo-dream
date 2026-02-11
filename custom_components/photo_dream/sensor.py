@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     DOMAIN,
     CONF_DEVICES,
+    CONF_IMMICH_URL,
     ATTR_CURRENT_IMAGE,
     ATTR_CURRENT_IMAGE_URL,
     ATTR_PROFILE,
@@ -81,10 +82,8 @@ class PhotoDreamCurrentImageSensor(SensorEntity):
         if not image_id:
             return None
         
-        # Get Immich base URL from config
-        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
-        config = entry_data.get("config", {})
-        immich_url = config.get("immich_url", "").rstrip("/")
+        # Get Immich base URL from config entry data
+        immich_url = self._entry.data.get(CONF_IMMICH_URL, "").rstrip("/")
         
         if immich_url:
             return f"{immich_url}/photos/{image_id}"
