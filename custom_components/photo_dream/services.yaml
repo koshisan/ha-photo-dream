@@ -1,0 +1,42 @@
+next_image:
+  name: Next Image
+  description: Advance to the next image on a PhotoDream device.
+  fields:
+    device_id:
+      name: Device ID
+      description: The ID of the PhotoDream device.
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+
+refresh_config:
+  name: Refresh Config
+  description: Trigger the device to reload its configuration from Home Assistant.
+  fields:
+    device_id:
+      name: Device ID
+      description: The ID of the PhotoDream device.
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+
+set_profile:
+  name: Set Profile
+  description: Change the active profile on a PhotoDream device.
+  fields:
+    device_id:
+      name: Device ID
+      description: The ID of the PhotoDream device.
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+    profile:
+      name: Profile
+      description: The name of the profile to activate.
+      required: true
+      example: "christmas"
+      selector:
+        text:

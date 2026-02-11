@@ -1,0 +1,73 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Immich Configuration",
+        "description": "Configure connection to your Immich server.",
+        "data": {
+          "immich_url": "Immich URL",
+          "immich_api_key": "Immich API Key"
+        }
+      },
+      "profile": {
+        "title": "Add Profile",
+        "description": "Create a photo filter profile. Profiles added: {profile_count}",
+        "data": {
+          "name": "Profile Name",
+          "search_queries": "Search Queries (comma-separated)",
+          "exclude_paths": "Exclude Paths (comma-separated, e.g., /Private/*)",
+          "add_another": "Add another profile"
+        }
+      },
+      "device": {
+        "title": "Add Device",
+        "description": "Configure a PhotoDream tablet. Devices added: {device_count}. Available profiles: {profiles}",
+        "data": {
+          "device_id": "Device ID (used in app settings)",
+          "device_name": "Display Name (optional)",
+          "device_ip": "Device IP Address",
+          "device_port": "HTTP Server Port",
+          "device_profile": "Default Profile",
+          "clock": "Show Clock",
+          "clock_position": "Clock Position",
+          "clock_format": "Clock Format",
+          "interval_seconds": "Slide Interval (seconds)",
+          "add_another": "Add another device"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Immich server. Please check URL and API key."
+    },
+    "abort": {
+      "already_configured": "PhotoDream is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PhotoDream Options",
+        "data": {
+          "immich_url": "Immich URL"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_image": {
+        "name": "Current Image"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      }
+    },
+    "select": {
+      "profile": {
+        "name": "Profile"
+      }
+    }
+  }
+}
