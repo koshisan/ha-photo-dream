@@ -3,36 +3,32 @@
     "step": {
       "user": {
         "title": "Immich Configuration",
-        "description": "Configure connection to your Immich server.",
+        "description": "Configure connection to your Immich server. Devices will be added automatically when they connect.",
         "data": {
           "immich_url": "Immich URL",
           "immich_api_key": "Immich API Key"
         }
       },
       "profile": {
-        "title": "Add Profile",
-        "description": "Create a photo filter profile. Profiles added: {profile_count}",
+        "title": "Create Profile",
+        "description": "Create a photo filter profile. You can add more profiles later in the integration options.\n\nProfiles created: {profile_count}",
         "data": {
           "name": "Profile Name",
           "search_queries": "Search Queries (comma-separated)",
-          "exclude_paths": "Exclude Paths (comma-separated, e.g., /Private/*)",
+          "exclude_paths": "Exclude Paths (comma-separated)",
           "add_another": "Add another profile"
         }
       },
-      "device": {
-        "title": "Add Device",
-        "description": "Configure a PhotoDream tablet. Devices added: {device_count}. Available profiles: {profiles}",
+      "discovery_confirm": {
+        "title": "Configure Device: {device_id}",
+        "description": "A new PhotoDream device wants to connect.\n\nDevice ID: **{device_id}**\nIP Address: **{device_ip}**",
         "data": {
-          "device_id": "Device ID (used in app settings)",
-          "device_name": "Display Name (optional)",
-          "device_ip": "Device IP Address",
-          "device_port": "HTTP Server Port",
-          "device_profile": "Default Profile",
+          "device_name": "Display Name",
+          "profile": "Profile",
           "clock": "Show Clock",
           "clock_position": "Clock Position",
           "clock_format": "Clock Format",
-          "interval_seconds": "Slide Interval (seconds)",
-          "add_another": "Add another device"
+          "interval_seconds": "Slide Interval (seconds)"
         }
       }
     },
@@ -40,15 +36,91 @@
       "cannot_connect": "Cannot connect to Immich server. Please check URL and API key."
     },
     "abort": {
-      "already_configured": "PhotoDream is already configured."
+      "single_instance_allowed": "PhotoDream is already configured. Use options to manage profiles and devices.",
+      "device_configured": "Device has been configured and will start showing photos.",
+      "no_device": "No device information available.",
+      "no_config": "Please configure PhotoDream integration first."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "PhotoDream Options",
+        "title": "PhotoDream Settings",
+        "menu_options": {
+          "manage_profiles": "Manage Profiles",
+          "manage_devices": "Manage Devices",
+          "immich_settings": "Immich Settings"
+        }
+      },
+      "manage_profiles": {
+        "title": "Manage Profiles",
+        "description": "Current profiles: {profiles}",
         "data": {
-          "immich_url": "Immich URL"
+          "action": "Action"
+        }
+      },
+      "add_profile": {
+        "title": "Add Profile",
+        "data": {
+          "name": "Profile Name",
+          "search_queries": "Search Queries (comma-separated)",
+          "exclude_paths": "Exclude Paths (comma-separated)"
+        }
+      },
+      "select_profile_edit": {
+        "title": "Select Profile to Edit",
+        "data": {
+          "profile": "Profile"
+        }
+      },
+      "edit_profile": {
+        "title": "Edit Profile: {profile_name}",
+        "data": {
+          "search_queries": "Search Queries (comma-separated)",
+          "exclude_paths": "Exclude Paths (comma-separated)"
+        }
+      },
+      "select_profile_delete": {
+        "title": "Select Profile to Delete",
+        "data": {
+          "profile": "Profile"
+        }
+      },
+      "manage_devices": {
+        "title": "Manage Devices",
+        "description": "Current devices: {devices}\n\nNew devices are added automatically when they connect to Home Assistant.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "select_device_edit": {
+        "title": "Select Device to Edit",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "edit_device": {
+        "title": "Edit Device: {device_id}",
+        "data": {
+          "device_name": "Display Name",
+          "profile": "Profile",
+          "clock": "Show Clock",
+          "clock_position": "Clock Position",
+          "clock_format": "Clock Format",
+          "interval_seconds": "Slide Interval (seconds)"
+        }
+      },
+      "select_device_delete": {
+        "title": "Select Device to Delete",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "immich_settings": {
+        "title": "Immich Settings",
+        "data": {
+          "immich_url": "Immich URL",
+          "immich_api_key": "Immich API Key"
         }
       }
     }

@@ -26,6 +26,8 @@ from .const import (
     SERVICE_SET_PROFILE,
     ATTR_DEVICE_ID,
     ATTR_PROFILE,
+    WEBHOOK_REGISTER,
+    WEBHOOK_STATUS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,20 +41,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Store config data
     hass.data[DOMAIN][entry.entry_id] = {
-        "config": entry.data,
-        "devices": {},  # Will store device status
+        "config": dict(entry.data),
+        "options": dict(entry.options),
+        "devices": {},  # Runtime device status
+        "pending_devices": {},  # Devices waiting for approval
     }
     
-    # Register webhook for device status updates
-    webhook_id = entry.data.get("webhook_id", entry.entry_id)
+    # Register webhook for device registration (discovery)
+    webhook.async_register(
+        hass,
+        DOMAIN,
+        "PhotoDream Device Registration",
+        WEBHOOK_REGISTER,
+        handle_register_webhook,
+    )
+    _LOGGER.info("Registered discovery webhook: %s", WEBHOOK_REGISTER)
+    
+    # Register webhook for device status updates (per-device)
+    status_webhook_id = f"{WEBHOOK_STATUS}_{entry.entry_id}"
     webhook.async_register(
         hass,
         DOMAIN,
         "PhotoDream Device Status",
-        webhook_id,
-        handle_webhook,
+        status_webhook_id,
+        handle_status_webhook,
     )
-    _LOGGER.info("Registered webhook with ID: %s", webhook_id)
+    _LOGGER.info("Registered status webhook: %s", status_webhook_id)
     
     # Setup platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -65,9 +79,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Unregister webhook
-    webhook_id = entry.data.get("webhook_id", entry.entry_id)
-    webhook.async_unregister(hass, webhook_id)
+    # Unregister webhooks
+    webhook.async_unregister(hass, WEBHOOK_REGISTER)
+    webhook.async_unregister(hass, f"{WEBHOOK_STATUS}_{entry.entry_id}")
     
     # Unload platforms
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
@@ -76,10 +90,96 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-async def handle_webhook(
+async def handle_register_webhook(
     hass: HomeAssistant, webhook_id: str, request: aiohttp.web.Request
 ) -> aiohttp.web.Response:
-    """Handle webhook from PhotoDream devices."""
+    """Handle device registration webhook (discovery)."""
+    try:
+        # Handle GET - device polling for config
+        if request.method == "GET":
+            device_id = request.query.get("device_id")
+            if not device_id:
+                return aiohttp.web.json_response({"status": "error", "message": "Missing device_id"}, status=400)
+            
+            # Check if device is configured
+            config = await get_device_config(hass, device_id)
+            if config:
+                return aiohttp.web.json_response({"status": "configured", "config": config})
+            
+            # Check if device is pending
+            for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
+                if isinstance(entry_data, dict):
+                    pending = entry_data.get("pending_devices", {})
+                    if device_id in pending:
+                        return aiohttp.web.json_response({"status": "pending"})
+            
+            return aiohttp.web.json_response({"status": "unknown"})
+        
+        # Handle POST - device registration
+        data = await request.json()
+        device_id = data.get("device_id")
+        device_ip = data.get("device_ip")
+        device_port = data.get("device_port", DEFAULT_PORT)
+        
+        if not device_id or not device_ip:
+            return aiohttp.web.json_response(
+                {"status": "error", "message": "Missing device_id or device_ip"},
+                status=400
+            )
+        
+        _LOGGER.info("Device registration request: %s at %s:%s", device_id, device_ip, device_port)
+        
+        # Find the config entry and add to pending
+        for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(entry_data, dict) and "pending_devices" in entry_data:
+                # Check if already configured
+                devices = entry_data.get("config", {}).get(CONF_DEVICES, {})
+                if device_id in devices:
+                    # Already configured - return config
+                    config = await get_device_config(hass, device_id)
+                    return aiohttp.web.json_response({"status": "configured", "config": config})
+                
+                # Add to pending
+                entry_data["pending_devices"][device_id] = {
+                    "device_ip": device_ip,
+                    "device_port": device_port,
+                }
+                
+                # Fire discovery event for config flow
+                hass.bus.async_fire(
+                    f"{DOMAIN}_device_discovered",
+                    {"device_id": device_id, "device_ip": device_ip, "device_port": device_port},
+                )
+                
+                # Trigger discovery flow
+                hass.async_create_task(
+                    hass.config_entries.flow.async_init(
+                        DOMAIN,
+                        context={"source": "discovery"},
+                        data={
+                            "device_id": device_id,
+                            "device_ip": device_ip,
+                            "device_port": device_port,
+                        },
+                    )
+                )
+                
+                return aiohttp.web.json_response({"status": "pending", "message": "Waiting for approval in Home Assistant"})
+        
+        return aiohttp.web.json_response(
+            {"status": "error", "message": "PhotoDream integration not configured"},
+            status=400
+        )
+        
+    except Exception as e:
+        _LOGGER.error("Error handling register webhook: %s", e)
+        return aiohttp.web.Response(status=500, text=str(e))
+
+
+async def handle_status_webhook(
+    hass: HomeAssistant, webhook_id: str, request: aiohttp.web.Request
+) -> aiohttp.web.Response:
+    """Handle webhook from PhotoDream devices (status updates)."""
     try:
         data = await request.json()
         device_id = data.get("device_id")
@@ -87,7 +187,7 @@ async def handle_webhook(
         if not device_id:
             return aiohttp.web.Response(status=400, text="Missing device_id")
         
-        _LOGGER.debug("Received webhook from device %s: %s", device_id, data)
+        _LOGGER.debug("Received status from device %s: %s", device_id, data)
         
         # Find the config entry for this webhook
         for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
@@ -108,15 +208,10 @@ async def handle_webhook(
                 )
                 break
         
-        # Return config for the device
-        config = await get_device_config(hass, device_id)
-        if config:
-            return aiohttp.web.json_response(config)
-        
         return aiohttp.web.json_response({"status": "ok"})
         
     except Exception as e:
-        _LOGGER.error("Error handling webhook: %s", e)
+        _LOGGER.error("Error handling status webhook: %s", e)
         return aiohttp.web.Response(status=500, text=str(e))
 
 
@@ -127,13 +222,21 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             continue
             
         config = entry_data["config"]
+        options = entry_data.get("options", {})
         devices = config.get(CONF_DEVICES, {})
+        
+        # Merge options into config (options override config)
+        profiles = {**config.get(CONF_PROFILES, {}), **options.get(CONF_PROFILES, {})}
         
         if device_id in devices:
             device = devices[device_id]
-            profiles = config.get(CONF_PROFILES, {})
             profile_name = device.get("profile", "default")
             profile = profiles.get(profile_name, {})
+            
+            # Generate status webhook URL
+            status_webhook_url = webhook.async_generate_url(
+                hass, f"{WEBHOOK_STATUS}_{entry_id}"
+            )
             
             return {
                 "device_id": device_id,
@@ -155,12 +258,47 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
                     "search_queries": profile.get("search_queries", []),
                     "exclude_paths": profile.get("exclude_paths", []),
                 },
-                "webhook_url": webhook.async_generate_url(
-                    hass, config.get("webhook_id", entry_id)
-                ),
+                "webhook_url": status_webhook_url,
             }
     
     return None
+
+
+async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
+    """Push configuration to a device."""
+    config = await get_device_config(hass, device_id)
+    if not config:
+        _LOGGER.error("No config found for device %s", device_id)
+        return False
+    
+    # Find device IP
+    for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
+        if not isinstance(entry_data, dict):
+            continue
+        
+        devices = entry_data.get("config", {}).get(CONF_DEVICES, {})
+        if device_id in devices:
+            device = devices[device_id]
+            ip = device.get(CONF_DEVICE_IP)
+            port = device.get(CONF_DEVICE_PORT, DEFAULT_PORT)
+            
+            if not ip:
+                _LOGGER.error("No IP for device %s", device_id)
+                return False
+            
+            url = f"http://{ip}:{port}/configure"
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=config, timeout=10) as resp:
+                        if resp.status == 200:
+                            _LOGGER.info("Config pushed to device %s", device_id)
+                            return True
+                        else:
+                            _LOGGER.error("Failed to push config to %s: %s", device_id, resp.status)
+            except Exception as e:
+                _LOGGER.error("Error pushing config to %s: %s", device_id, e)
+    
+    return False
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
@@ -174,13 +312,23 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_refresh_config(call: ServiceCall) -> None:
         """Handle refresh_config service call."""
         device_id = call.data.get(ATTR_DEVICE_ID)
-        await send_command_to_device(hass, device_id, "refresh-config")
+        await push_config_to_device(hass, device_id)
     
     async def handle_set_profile(call: ServiceCall) -> None:
         """Handle set_profile service call."""
         device_id = call.data.get(ATTR_DEVICE_ID)
         profile = call.data.get(ATTR_PROFILE)
-        await send_command_to_device(hass, device_id, "set-profile", {"profile": profile})
+        
+        # Update device profile in config
+        for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
+            if not isinstance(entry_data, dict):
+                continue
+            devices = entry_data.get("config", {}).get(CONF_DEVICES, {})
+            if device_id in devices:
+                devices[device_id]["profile"] = profile
+                # Push new config
+                await push_config_to_device(hass, device_id)
+                break
     
     hass.services.async_register(DOMAIN, SERVICE_NEXT_IMAGE, handle_next_image)
     hass.services.async_register(DOMAIN, SERVICE_REFRESH_CONFIG, handle_refresh_config)
@@ -191,7 +339,6 @@ async def send_command_to_device(
     hass: HomeAssistant, device_id: str, command: str, data: dict | None = None
 ) -> bool:
     """Send a command to a PhotoDream device."""
-    # Find device IP and port
     for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
         if not isinstance(entry_data, dict) or "config" not in entry_data:
             continue
@@ -214,11 +361,9 @@ async def send_command_to_device(
                 async with aiohttp.ClientSession() as session:
                     if data:
                         async with session.post(url, json=data, timeout=5) as resp:
-                            _LOGGER.debug("Command %s sent to %s: %s", command, device_id, resp.status)
                             return resp.status == 200
                     else:
                         async with session.post(url, timeout=5) as resp:
-                            _LOGGER.debug("Command %s sent to %s: %s", command, device_id, resp.status)
                             return resp.status == 200
             except Exception as e:
                 _LOGGER.error("Failed to send command to device %s: %s", device_id, e)
