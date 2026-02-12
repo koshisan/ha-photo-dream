@@ -104,13 +104,18 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _get_image_count(
         self, immich_url: str, api_key: str, search_filter: dict
     ) -> int:
-        """Query Immich API to get image count for a search filter."""
-        # Use the search/metadata endpoint with count
-        url = f"{immich_url}/api/search/metadata"
+        """Query Immich API to get image count for a search filter.
+        
+        Uses /api/search/smart to get total count (supports semantic query).
+        This gives the real total regardless of display mode pagination.
+        """
+        url = f"{immich_url}/api/search/smart"
         headers = {"x-api-key": api_key, "Content-Type": "application/json"}
         
-        # Build search payload
+        # Build search payload - only need 1 result, we just want the total
         payload = dict(search_filter) if search_filter else {}
+        payload["size"] = 1  # Minimize data transfer, we only need total count
+        payload["type"] = payload.get("type", "IMAGE")
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -122,10 +127,10 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        # The response has assets.items array
+                        # The response has assets.total for total matching count
                         assets = data.get("assets", {})
-                        items = assets.get("items", [])
-                        total = assets.get("total", len(items))
+                        total = assets.get("total", 0)
+                        _LOGGER.debug("Image count for filter: %d", total)
                         return total
                     else:
                         text = await resp.text()
