@@ -198,11 +198,14 @@ async def handle_status_webhook(
         if not device_id:
             return aiohttp.web.Response(status=400, text="Missing device_id")
         
-        _LOGGER.debug("Received status from device %s: %s", device_id, data)
+        _LOGGER.info("Received status from device %s: %s", device_id, data)
         
         # Find the config entry for this webhook
+        _LOGGER.info("Looking for entry to store device %s status in %d entries", device_id, len(hass.data.get(DOMAIN, {})))
         for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
+            _LOGGER.info("Checking entry %s: is_dict=%s, has_devices=%s", entry_id, isinstance(entry_data, dict), "devices" in entry_data if isinstance(entry_data, dict) else "N/A")
             if isinstance(entry_data, dict) and "devices" in entry_data:
+                _LOGGER.info("Storing status for device %s in entry %s", device_id, entry_id)
                 # Store device status
                 entry_data["devices"][device_id] = {
                     "online": data.get("online", True),
@@ -224,6 +227,7 @@ async def handle_status_webhook(
                     await _update_device_mac(hass, entry_id, device_id, mac_address)
                 
                 # Fire event for entity updates
+                _LOGGER.info("Stored device data, firing event. Devices now: %s", list(entry_data["devices"].keys()))
                 hass.bus.async_fire(
                     f"{DOMAIN}_device_update",
                     {"device_id": device_id, "data": data},
