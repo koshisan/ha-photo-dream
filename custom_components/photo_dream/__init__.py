@@ -409,10 +409,12 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
         hass, f"{WEBHOOK_STATUS}_{entry.entry_id}"
     )
     
-    # Get weather data if configured
+    # Get weather data if enabled AND entity configured
     weather_config = None
+    weather_enabled = device.get("weather", False)  # From the switch
     weather_entity_id = device.get(CONF_WEATHER_ENTITY)
-    if weather_entity_id:
+    
+    if weather_enabled and weather_entity_id:
         weather_state = hass.states.get(weather_entity_id)
         if weather_state:
             # Get temperature unit from HA config
@@ -425,6 +427,11 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
                 "temperature_unit": temp_unit,
             }
             _LOGGER.debug("Weather for %s: %s", device_id, weather_config)
+        else:
+            _LOGGER.warning("Weather entity %s not found", weather_entity_id)
+    else:
+        _LOGGER.debug("Weather disabled or no entity for %s (enabled=%s, entity=%s)", 
+                     device_id, weather_enabled, weather_entity_id)
     
     return {
         "device_id": device_id,
