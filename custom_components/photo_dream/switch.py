@@ -15,6 +15,7 @@ from .const import (
     CONF_DEVICES,
     
     CONF_CLOCK,
+    CONF_DATE,
     CONF_WEATHER,
 )
 from . import push_config_to_device
@@ -34,6 +35,7 @@ async def async_setup_entry(
     entities = []
     for device_id, device_config in devices.items():
         entities.append(PhotoDreamClockSwitch(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamDateSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamWeatherSwitch(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
@@ -77,6 +79,63 @@ class PhotoDreamClockSwitch(SwitchEntity):
     async def _set_clock(self, enabled: bool) -> None:
         """Set clock state and push config."""
         self._update_device_config(CONF_CLOCK, enabled)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+    def _get_device_config(self) -> dict:
+        """Get current device config."""
+        config = self._entry.data
+        return config.get(CONF_DEVICES, {}).get(self._device_id, {})
+
+    def _update_device_config(self, key: str, value: Any) -> None:
+        """Update device config in entry data."""
+        new_data = dict(self._entry.data)
+        if CONF_DEVICES not in new_data:
+            new_data[CONF_DEVICES] = {}
+        if self._device_id not in new_data[CONF_DEVICES]:
+            new_data[CONF_DEVICES][self._device_id] = {}
+        new_data[CONF_DEVICES][self._device_id][key] = value
+        self.hass.config_entries.async_update_entry(self._entry, data=new_data)
+
+
+class PhotoDreamDateSwitch(SwitchEntity):
+    """Switch to toggle date display on a PhotoDream device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Date"
+    _attr_icon = "mdi:calendar"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the switch."""
+        self.hass = hass
+        self._entry = entry
+        self._device_id = device_id
+        self._device_config = device_config
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_date"
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if date is enabled."""
+        return self._get_device_config().get(CONF_DATE, False)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the date."""
+        await self._set_date(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the date."""
+        await self._set_date(False)
+
+    async def _set_date(self, enabled: bool) -> None:
+        """Set date state and push config."""
+        self._update_device_config(CONF_DATE, enabled)
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
 

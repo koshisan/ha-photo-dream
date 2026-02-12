@@ -21,6 +21,7 @@ from .const import (
     ATTR_IP_ADDRESS,
     ATTR_DISPLAY_WIDTH,
     ATTR_DISPLAY_HEIGHT,
+    ATTR_APP_VERSION,
 )
 from .helpers import get_device_info
 
@@ -42,6 +43,7 @@ async def async_setup_entry(
         entities.append(PhotoDreamMacAddressSensor(hass, entry, device_id, device_config))
         entities.append(PhotoDreamIpAddressSensor(hass, entry, device_id, device_config))
         entities.append(PhotoDreamResolutionSensor(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamVersionSensor(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -244,6 +246,51 @@ class PhotoDreamResolutionSensor(SensorEntity):
         if width and height:
             return f"{width}x{height}"
         return None
+
+    def _get_device_data(self) -> dict | None:
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get("devices", {}).get(self._device_id)
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self.hass.bus.async_listen(f"{DOMAIN}_device_update", self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, event) -> None:
+        if event.data.get("device_id") == self._device_id:
+            self.async_write_ha_state()
+
+
+class PhotoDreamVersionSensor(SensorEntity):
+    """Sensor showing app version of a PhotoDream device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "App Version"
+    _attr_icon = "mdi:tag"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the sensor."""
+        self.hass = hass
+        self._entry = entry
+        self._device_id = device_id
+        self._device_config = device_config
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_app_version"
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the app version."""
+        device_data = self._get_device_data()
+        if not device_data:
+            return None
+        return device_data.get(ATTR_APP_VERSION)
 
     def _get_device_data(self) -> dict | None:
         entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})

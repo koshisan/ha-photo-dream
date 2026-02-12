@@ -21,6 +21,8 @@ CONF_CLOCK: Final = "clock"
 CONF_CLOCK_POSITION: Final = "clock_position"
 CONF_CLOCK_FORMAT: Final = "clock_format"
 CONF_CLOCK_FONT_SIZE: Final = "clock_font_size"
+CONF_DATE: Final = "date"
+CONF_DATE_FORMAT: Final = "date_format"
 CONF_WEATHER: Final = "weather"
 CONF_INTERVAL: Final = "interval_seconds"
 CONF_PAN_SPEED: Final = "pan_speed"
@@ -35,20 +37,35 @@ CONF_EXCLUDE_PATHS: Final = "exclude_paths"
 # Defaults
 DEFAULT_PORT: Final = 8080
 DEFAULT_CLOCK: Final = True
-DEFAULT_CLOCK_POSITION: Final = 3  # bottom-right
+DEFAULT_CLOCK_POSITION: Final = 3  # bottom-left
 DEFAULT_CLOCK_FORMAT: Final = "24h"
 DEFAULT_CLOCK_FONT_SIZE: Final = 32
+DEFAULT_DATE: Final = False
+DEFAULT_DATE_FORMAT: Final = "dd.MM.yyyy"
 DEFAULT_WEATHER: Final = False
 DEFAULT_INTERVAL: Final = 30
 DEFAULT_PAN_SPEED: Final = 0.5
 DEFAULT_DISPLAY_MODE: Final = "smart_shuffle"
 
-# Clock positions
+# Clock positions (0-6)
 CLOCK_POSITIONS: Final = {
     0: "Top Left",
-    1: "Top Right",
-    2: "Bottom Left",
-    3: "Bottom Right",
+    1: "Top Center",
+    2: "Top Right",
+    3: "Bottom Left",
+    4: "Bottom Center",
+    5: "Bottom Right",
+    6: "Center",
+}
+
+# Date formats
+DATE_FORMATS: Final = {
+    "dd.MM.yyyy": "31.12.2025",
+    "MM/dd/yyyy": "12/31/2025",
+    "yyyy-MM-dd": "2025-12-31",
+    "dd MMM yyyy": "31 Dec 2025",
+    "EEEE, dd.MM.": "Wednesday, 31.12.",
+    "EEE, dd.MM.": "Wed, 31.12.",
 }
 
 # Services
@@ -67,6 +84,7 @@ ATTR_MAC_ADDRESS: Final = "mac_address"
 ATTR_IP_ADDRESS: Final = "ip_address"
 ATTR_DISPLAY_WIDTH: Final = "display_width"
 ATTR_DISPLAY_HEIGHT: Final = "display_height"
+ATTR_APP_VERSION: Final = "app_version"
 
 # Webhooks
 WEBHOOK_REGISTER: Final = "photo_dream_register"

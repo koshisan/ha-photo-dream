@@ -17,11 +17,14 @@ from .const import (
     
     CONF_CLOCK_POSITION,
     CONF_CLOCK_FORMAT,
+    CONF_DATE_FORMAT,
     CONF_DISPLAY_MODE,
     DEFAULT_CLOCK_POSITION,
     DEFAULT_CLOCK_FORMAT,
+    DEFAULT_DATE_FORMAT,
     DEFAULT_DISPLAY_MODE,
     CLOCK_POSITIONS,
+    DATE_FORMATS,
     ATTR_PROFILE,
 )
 from . import send_command_to_device, push_config_to_device
@@ -44,6 +47,7 @@ async def async_setup_entry(
         entities.append(PhotoDreamProfileSelect(hass, entry, device_id, device_config, profiles))
         entities.append(PhotoDreamClockPositionSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamClockFormatSelect(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamDateFormatSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamDisplayModeSelect(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
@@ -133,7 +137,7 @@ class PhotoDreamClockPositionSelect(SelectEntity):
     _attr_has_entity_name = True
     _attr_name = "Clock Position"
     _attr_icon = "mdi:clock-outline"
-    _attr_options = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"]
+    _attr_options = list(CLOCK_POSITIONS.values())  # Top Left, Top Center, Top Right, Bottom Left, Bottom Center, Bottom Right, Center
 
     def __init__(
         self,
@@ -155,7 +159,7 @@ class PhotoDreamClockPositionSelect(SelectEntity):
     def current_option(self) -> str | None:
         """Return the current clock position."""
         pos = self._get_device_config().get(CONF_CLOCK_POSITION, DEFAULT_CLOCK_POSITION)
-        return CLOCK_POSITIONS.get(pos, "Bottom Right")
+        return CLOCK_POSITIONS.get(pos, CLOCK_POSITIONS[DEFAULT_CLOCK_POSITION])
 
     async def async_select_option(self, option: str) -> None:
         """Change the clock position."""
@@ -212,6 +216,54 @@ class PhotoDreamClockFormatSelect(SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Change the clock format."""
         self._update_device_config(CONF_CLOCK_FORMAT, option)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+    def _get_device_config(self) -> dict:
+        return self._entry.data.get(CONF_DEVICES, {}).get(self._device_id, {})
+
+    def _update_device_config(self, key: str, value) -> None:
+        new_data = dict(self._entry.data)
+        if CONF_DEVICES not in new_data:
+            new_data[CONF_DEVICES] = {}
+        if self._device_id not in new_data[CONF_DEVICES]:
+            new_data[CONF_DEVICES][self._device_id] = {}
+        new_data[CONF_DEVICES][self._device_id][key] = value
+        self.hass.config_entries.async_update_entry(self._entry, data=new_data)
+
+
+class PhotoDreamDateFormatSelect(SelectEntity):
+    """Select entity for date format on a PhotoDream device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Date Format"
+    _attr_icon = "mdi:calendar"
+    _attr_options = list(DATE_FORMATS.keys())
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the select entity."""
+        self.hass = hass
+        self._entry = entry
+        self._device_id = device_id
+        self._device_config = device_config
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_date_format"
+        
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current date format."""
+        return self._get_device_config().get(CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT)
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the date format."""
+        self._update_device_config(CONF_DATE_FORMAT, option)
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
 
