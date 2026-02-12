@@ -343,17 +343,38 @@ async def _update_device_mac(
 def resolve_profile(hass: HomeAssistant, profile_id: str) -> tuple[ConfigEntry | None, str | None, dict]:
     """Resolve a profile_id to its Immich entry and profile config.
     
+    Supports both new format (entryid_profilename) and old format (just profilename).
     Returns (immich_entry, profile_name, profile_config) or (None, None, {}) if not found.
     """
-    # profile_id format: {entry_id}_{profile_name}
+    if not profile_id:
+        profile_id = ""
+    
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.data.get("entry_type") != ENTRY_TYPE_IMMICH:
             continue
         
-        for profile_name, profile_config in entry.data.get(CONF_PROFILES, {}).items():
+        profiles = entry.data.get(CONF_PROFILES, {})
+        
+        for profile_name, profile_config in profiles.items():
+            # Try new format: {entry_id}_{profile_name}
             expected_id = f"{entry.entry_id}_{profile_name}".replace(" ", "_").lower()
-            if expected_id == profile_id:
+            if expected_id == profile_id or expected_id == profile_id.lower():
                 return entry, profile_name, profile_config
+            
+            # Try old format: just the profile name
+            if profile_name == profile_id or profile_name.lower() == profile_id.lower():
+                _LOGGER.info("Resolved old-format profile '%s' to Immich entry %s", profile_id, entry.entry_id)
+                return entry, profile_name, profile_config
+    
+    # If no match and we have any Immich entry, return the first profile as fallback
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.data.get("entry_type") != ENTRY_TYPE_IMMICH:
+            continue
+        profiles = entry.data.get(CONF_PROFILES, {})
+        if profiles:
+            first_name = list(profiles.keys())[0]
+            _LOGGER.warning("Could not resolve profile '%s', falling back to '%s'", profile_id, first_name)
+            return entry, first_name, profiles[first_name]
     
     return None, None, {}
 
