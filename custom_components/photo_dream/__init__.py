@@ -496,7 +496,7 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
         return False
     
     url = f"http://{ip}:{port}/configure"
-    _LOGGER.info("Pushing config to device %s at %s", device_id, url)
+    _LOGGER.info("Pushing config to device %s at %s (profile: %s)", device_id, url, config.get("profile", {}).get("name"))
     
     try:
         async with aiohttp.ClientSession() as session:

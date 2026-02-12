@@ -176,6 +176,9 @@ class PhotoDreamProfileSelect(PhotoDreamBaseSelect):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected profile."""
+        # Refresh profile map first
+        self._update_options()
+        
         # Find profile_id from display name
         profile_id = None
         for pid, display in self._profile_map.items():
@@ -184,16 +187,22 @@ class PhotoDreamProfileSelect(PhotoDreamBaseSelect):
                 break
         
         if not profile_id:
-            _LOGGER.error("Could not find profile_id for option: %s", option)
+            _LOGGER.error("Could not find profile_id for option: %s (available: %s)", option, list(self._profile_map.keys()))
             return
         
         _LOGGER.info("Setting profile to %s (%s) for device %s", option, profile_id, self._device_id)
         
-        # Update config
+        # Update config entry
         self._update_device_config(CONF_PROFILE_ID, profile_id)
         
+        # Small delay to ensure entry is updated before push
+        import asyncio
+        await asyncio.sleep(0.1)
+        
         # Push to device
-        await push_config_to_device(self.hass, self._device_id)
+        result = await push_config_to_device(self.hass, self._device_id)
+        _LOGGER.info("Config push result for %s: %s", self._device_id, result)
+        
         self.async_write_ha_state()
 
 
