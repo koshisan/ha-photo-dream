@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
+from homeassistant.util import dt as dt_util
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -39,6 +40,7 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Initialize the coordinator."""
         self.entry = entry
         self._previous_counts: dict[str, int] = {}
+        self.last_update_success_time: datetime | None = None
         
         super().__init__(
             hass,
@@ -93,6 +95,9 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # If any count changed, trigger tablet refreshes
         if counts_changed:
             self.hass.async_create_task(self._refresh_all_tablets())
+        
+        # Update success time
+        self.last_update_success_time = dt_util.utcnow()
         
         return result
 
