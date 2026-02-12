@@ -299,6 +299,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             status_webhook_url = webhook.async_generate_url(
                 hass, f"{WEBHOOK_STATUS}_{entry_id}"
             )
+            _LOGGER.info("Generated webhook URL for device %s: %s", device_id, status_webhook_url)
             
             return {
                 "device_id": device_id,
