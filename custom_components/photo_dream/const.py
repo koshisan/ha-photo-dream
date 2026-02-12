@@ -3,10 +3,17 @@ from typing import Final
 
 DOMAIN: Final = "photo_dream"
 
-# Config keys
+# Entry types (stored in entry.data["entry_type"])
+ENTRY_TYPE_HUB: Final = "hub"
+ENTRY_TYPE_IMMICH: Final = "immich"
+
+# Config keys - Hub
+CONF_DEVICES: Final = "devices"
+
+# Config keys - Immich instance
 CONF_IMMICH_URL: Final = "immich_url"
 CONF_IMMICH_API_KEY: Final = "immich_api_key"
-CONF_DEVICES: Final = "devices"
+CONF_IMMICH_NAME: Final = "immich_name"
 CONF_PROFILES: Final = "profiles"
 
 # Device config keys
@@ -30,8 +37,8 @@ CONF_DISPLAY_MODE: Final = "display_mode"
 
 # Profile config keys
 CONF_PROFILE_NAME: Final = "name"
-CONF_SEARCH_QUERIES: Final = "search_queries"  # Legacy
-CONF_SEARCH_FILTER: Final = "search_filter"  # New: JSON object or Immich URL
+CONF_PROFILE_ID: Final = "profile_id"
+CONF_SEARCH_FILTER: Final = "search_filter"
 CONF_EXCLUDE_PATHS: Final = "exclude_paths"
 
 # Defaults
@@ -76,6 +83,7 @@ SERVICE_SET_PROFILE: Final = "set_profile"
 # Attributes
 ATTR_DEVICE_ID: Final = "device_id"
 ATTR_PROFILE: Final = "profile"
+ATTR_PROFILE_ID: Final = "profile_id"
 ATTR_CURRENT_IMAGE: Final = "current_image"
 ATTR_CURRENT_IMAGE_URL: Final = "current_image_url"
 ATTR_LAST_SEEN: Final = "last_seen"

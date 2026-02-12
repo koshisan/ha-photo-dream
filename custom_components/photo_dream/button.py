@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     DOMAIN,
+    ENTRY_TYPE_HUB,
     CONF_DEVICES,
 )
 from .helpers import get_device_info
@@ -23,8 +24,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up PhotoDream buttons from a config entry."""
-    config = entry.data
-    devices = config.get(CONF_DEVICES, {})
+    # Only create entities for Hub entries
+    if entry.data.get("entry_type") != ENTRY_TYPE_HUB:
+        return
+    
+    devices = entry.data.get(CONF_DEVICES, {})
     
     entities = []
     for device_id, device_config in devices.items():
