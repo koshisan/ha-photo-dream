@@ -203,7 +203,7 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="profile",
             data_schema=vol.Schema({
                 vol.Required(CONF_PROFILE_NAME, default="default"): str,
-                vol.Required(CONF_SEARCH_FILTER, default=""): str,
+                vol.Optional(CONF_SEARCH_FILTER, default=""): str,
                 vol.Optional(CONF_EXCLUDE_PATHS, default="/Private/*"): str,
                 vol.Optional("add_another", default=False): bool,
             }),
@@ -609,7 +609,7 @@ class ImmichOptionsFlow(OptionsFlow):
             step_id="add_profile",
             data_schema=vol.Schema({
                 vol.Required(CONF_PROFILE_NAME): str,
-                vol.Required(CONF_SEARCH_FILTER): str,
+                vol.Optional(CONF_SEARCH_FILTER, default=""): str,
                 vol.Optional(CONF_EXCLUDE_PATHS, default=""): str,
             }),
         )
@@ -657,7 +657,7 @@ class ImmichOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="edit_profile",
             data_schema=vol.Schema({
-                vol.Required(CONF_SEARCH_FILTER, default=filter_str): str,
+                vol.Optional(CONF_SEARCH_FILTER, default=filter_str): str,
                 vol.Optional(CONF_EXCLUDE_PATHS, default=", ".join(profile.get(CONF_EXCLUDE_PATHS, []))): str,
             }),
             description_placeholders={"profile_name": profile_name},

@@ -23,7 +23,7 @@
         "description": "Create a photo filter profile for **{immich_name}**.\n\nProfiles created: {profile_count}\n\nTip: Build your search in Immich UI, then copy the URL or JSON query.",
         "data": {
           "name": "Profile Name",
-          "search_filter": "Immich Search (URL, JSON, or simple query)",
+          "search_filter": "Immich Search (optional - empty = all images)",
           "exclude_paths": "Exclude Paths (comma-separated)",
           "add_another": "Add another profile"
         }
@@ -110,7 +110,7 @@
         "description": "Tip: Build your search in Immich UI, then copy the URL.",
         "data": {
           "name": "Profile Name",
-          "search_filter": "Immich Search (URL, JSON, or simple query)",
+          "search_filter": "Immich Search (optional - empty = all images)",
           "exclude_paths": "Exclude Paths (comma-separated)"
         }
       },
@@ -123,7 +123,7 @@
       "edit_profile": {
         "title": "Edit Profile: {profile_name}",
         "data": {
-          "search_filter": "Immich Search (URL, JSON, or simple query)",
+          "search_filter": "Immich Search (optional - empty = all images)",
           "exclude_paths": "Exclude Paths (comma-separated)"
         }
       },
