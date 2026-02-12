@@ -403,6 +403,8 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     device = devices[device_id]
     profile_id = device.get(CONF_PROFILE_ID, device.get("profile", ""))
     
+    _LOGGER.info("get_device_config: device=%s, profile_id='%s'", device_id, profile_id)
+    
     # Resolve profile to Immich instance
     immich_entry, profile_name, profile_config = resolve_profile(hass, profile_id)
     
@@ -439,6 +441,8 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
         _LOGGER.debug("Weather disabled or no entity for %s (enabled=%s, entity=%s)", 
                      device_id, weather_enabled, weather_entity_id)
     
+    _LOGGER.info("Config for %s: profile_id='%s', profile_name='%s'", device_id, profile_id, profile_name)
+    
     return {
         "device_id": device_id,
         "immich": {
@@ -458,7 +462,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             "mode": device.get("display_mode", "smart_shuffle"),
         },
         "profile": {
-            "id": profile_id,  # Unique profile identifier
+            "id": profile_id,
             "name": profile_name,
             "search_filter": profile_config.get(CONF_SEARCH_FILTER, {}),
             "exclude_paths": profile_config.get(CONF_EXCLUDE_PATHS, []),
