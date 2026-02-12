@@ -381,20 +381,15 @@ def resolve_profile(hass: HomeAssistant, profile_id: str) -> tuple[ConfigEntry |
 
 async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     """Get configuration for a specific device."""
-    # Find Hub entry directly from config_entries (more reliable than cached reference)
-    hub_entry = None
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.data.get("entry_type") == ENTRY_TYPE_HUB:
-            hub_entry = entry
-            break
-    
-    if not hub_entry:
-        _LOGGER.error("No PhotoDream Hub found")
+    hub_data = hass.data.get(DOMAIN, {}).get("hub")
+    if not hub_data:
         return None
     
-    devices = hub_entry.data.get(CONF_DEVICES, {})
-    _LOGGER.debug("get_device_config: Looking for device %s in %s", device_id, list(devices.keys()))
+    entry = hub_data.get("entry")
+    if not entry:
+        return None
     
+    devices = entry.data.get(CONF_DEVICES, {})
     if device_id not in devices:
         return None
     
@@ -410,7 +405,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     
     # Generate status webhook URL
     status_webhook_url = webhook.async_generate_url(
-        hass, f"{WEBHOOK_STATUS}_{hub_entry.entry_id}"
+        hass, f"{WEBHOOK_STATUS}_{entry.entry_id}"
     )
     
     return {
@@ -447,20 +442,12 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
         _LOGGER.error("No config found for device %s", device_id)
         return False
     
-    # Find Hub entry directly
-    hub_entry = None
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.data.get("entry_type") == ENTRY_TYPE_HUB:
-            hub_entry = entry
-            break
-    
-    if not hub_entry:
-        _LOGGER.error("No Hub entry found")
+    hub_data = hass.data.get(DOMAIN, {}).get("hub")
+    if not hub_data:
         return False
     
-    devices = hub_entry.data.get(CONF_DEVICES, {})
+    devices = hub_data.get("entry").data.get(CONF_DEVICES, {})
     if device_id not in devices:
-        _LOGGER.error("Device %s not in Hub devices", device_id)
         return False
     
     device = devices[device_id]
