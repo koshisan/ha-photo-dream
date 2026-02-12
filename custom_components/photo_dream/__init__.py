@@ -215,6 +215,7 @@ async def handle_status_webhook(
                     "ip_address": data.get("ip_address"),
                     "display_width": data.get("display_width"),
                     "display_height": data.get("display_height"),
+                    "app_version": data.get("app_version"),
                 }
                 
                 # Update device registry with MAC address for network matching
