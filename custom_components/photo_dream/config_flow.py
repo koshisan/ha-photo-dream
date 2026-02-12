@@ -12,6 +12,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow, ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     DOMAIN,
@@ -671,7 +672,19 @@ class ImmichOptionsFlow(OptionsFlow):
             return await self.async_step_manage_profiles()
         
         if user_input is not None:
-            del self._profiles[user_input["profile"]]
+            profile_name = user_input["profile"]
+            
+            # Remove the device from device registry
+            profile_id = generate_profile_id(self._entry.entry_id, profile_name)
+            device_registry = dr.async_get(self.hass)
+            device = device_registry.async_get_device(
+                identifiers={(DOMAIN, f"profile_{profile_id}")}
+            )
+            if device:
+                device_registry.async_remove_device(device.id)
+                _LOGGER.debug("Removed device for profile: %s", profile_name)
+            
+            del self._profiles[profile_name]
             return await self._save_and_finish()
         
         return self.async_show_form(

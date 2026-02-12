@@ -251,6 +251,18 @@ async def async_unload_immich_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
         if not await hass.config_entries.async_unload_platforms(entry, IMMICH_PLATFORMS):
             return False
     
+    # Remove all profile devices associated with this entry
+    device_registry = dr.async_get(hass)
+    profiles = entry.data.get(CONF_PROFILES, {})
+    for profile_name in profiles:
+        profile_id = f"{entry.entry_id}_{profile_name}".replace(" ", "_").lower()
+        device = device_registry.async_get_device(
+            identifiers={(DOMAIN, f"profile_{profile_id}")}
+        )
+        if device:
+            device_registry.async_remove_device(device.id)
+            _LOGGER.debug("Removed profile device: %s", profile_name)
+    
     hass.data[DOMAIN]["immich"].pop(entry.entry_id, None)
     return True
 
