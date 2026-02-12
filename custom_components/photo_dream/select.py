@@ -153,6 +153,12 @@ class PhotoDreamProfileSelect(PhotoDreamBaseSelect):
         self._attr_options = list(profiles.values()) if profiles else ["No profiles configured"]
 
     @property
+    def options(self) -> list[str]:
+        """Return options, refreshing from current config entries."""
+        self._update_options()
+        return self._attr_options
+
+    @property
     def current_option(self) -> str | None:
         """Return the current selected profile display name."""
         # First check runtime data for current profile name

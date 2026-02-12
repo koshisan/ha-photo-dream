@@ -73,6 +73,7 @@ async def async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool
     """Set up PhotoDream Hub (tablets)."""
     hass.data[DOMAIN]["hub"] = {
         "entry": entry,
+        "entry_id": entry.entry_id,  # Store ID for fresh lookups
         "devices": {},  # Runtime device status
         "pending_devices": {},  # Devices waiting for approval
     }
@@ -386,7 +387,12 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     if not hub_data:
         return None
     
-    entry = hub_data.get("entry")
+    entry_id = hub_data.get("entry_id")
+    if not entry_id:
+        return None
+    
+    # Get fresh entry from config_entries (not cached reference)
+    entry = hass.config_entries.async_get_entry(entry_id)
     if not entry:
         return None
     
@@ -471,7 +477,13 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
     if not hub_data:
         return False
     
-    devices = hub_data.get("entry").data.get(CONF_DEVICES, {})
+    # Get fresh entry (not cached reference)
+    entry_id = hub_data.get("entry_id")
+    entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+    if not entry:
+        return False
+    
+    devices = entry.data.get(CONF_DEVICES, {})
     if device_id not in devices:
         return False
     
