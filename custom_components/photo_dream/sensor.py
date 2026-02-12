@@ -19,6 +19,7 @@ from .const import (
     CONF_PROFILES,
     CONF_PROFILE_ID,
     CONF_IMMICH_NAME,
+    CONF_SEARCH_FILTER,
     ATTR_CURRENT_IMAGE,
     ATTR_CURRENT_IMAGE_URL,
     ATTR_PROFILE,
@@ -297,10 +298,11 @@ async def async_setup_immich_sensors(
     immich_name = entry.data.get(CONF_IMMICH_NAME, "Immich")
     
     entities = []
-    for profile_name in profiles:
+    for profile_name, profile_config in profiles.items():
         profile_id = f"{entry.entry_id}_{profile_name}".replace(" ", "_").lower()
         entities.append(ProfileImageCountSensor(coordinator, entry, profile_name, profile_id))
         entities.append(ProfileLastRefreshSensor(coordinator, entry, profile_name, profile_id))
+        entities.append(ProfileSearchFilterSensor(coordinator, entry, profile_name, profile_id, profile_config))
     
     async_add_entities(entities)
 
@@ -368,3 +370,61 @@ class ProfileLastRefreshSensor(CoordinatorEntity, SensorEntity):
         if self.coordinator.last_update_success_time:
             return self.coordinator.last_update_success_time
         return None
+
+
+class ProfileSearchFilterSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing the search filter/URL for a profile."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Search Filter"
+    _attr_icon = "mdi:filter"
+
+    def __init__(
+        self,
+        coordinator,
+        entry: ConfigEntry,
+        profile_name: str,
+        profile_id: str,
+        profile_config: dict,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._profile_name = profile_name
+        self._profile_id = profile_id
+        self._profile_config = profile_config
+        self._attr_unique_id = f"profile_{profile_id}_search_filter"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"profile_{profile_id}")},
+        }
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the search filter as string/URL."""
+        raw_filter = self._profile_config.get(CONF_SEARCH_FILTER)
+        if not raw_filter:
+            return None
+        
+        # If it's already a string (URL), return as-is
+        if isinstance(raw_filter, str):
+            return raw_filter
+        
+        # If it's a dict, convert to readable string
+        if isinstance(raw_filter, dict):
+            import json
+            return json.dumps(raw_filter, ensure_ascii=False)
+        
+        return str(raw_filter)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the parsed filter as attributes."""
+        from . import parse_immich_url
+        
+        raw_filter = self._profile_config.get(CONF_SEARCH_FILTER, {})
+        parsed = parse_immich_url(raw_filter)
+        
+        return {
+            "raw_input": raw_filter if isinstance(raw_filter, str) else None,
+            "parsed_filter": parsed,
+        }
