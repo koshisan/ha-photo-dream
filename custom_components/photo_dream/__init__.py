@@ -458,6 +458,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             "mode": device.get("display_mode", "smart_shuffle"),
         },
         "profile": {
+            "id": profile_id,  # Unique profile identifier
             "name": profile_name,
             "search_filter": profile_config.get(CONF_SEARCH_FILTER, {}),
             "exclude_paths": profile_config.get(CONF_EXCLUDE_PATHS, []),
