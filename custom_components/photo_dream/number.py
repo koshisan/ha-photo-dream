@@ -154,7 +154,7 @@ class PhotoDreamClockFontSizeNumber(PhotoDreamBaseNumber):
     _attr_name = "Clock Font Size"
     _attr_icon = "mdi:format-size"
     _attr_native_min_value = 16
-    _attr_native_max_value = 128
+    _attr_native_max_value = 200
     _attr_native_step = 4
     _attr_native_unit_of_measurement = "px"
     _attr_mode = NumberMode.SLIDER
