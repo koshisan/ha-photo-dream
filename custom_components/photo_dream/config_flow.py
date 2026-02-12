@@ -101,53 +101,28 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the initial step - choose what to add."""
+        """Handle the initial step."""
         # Check if hub exists
         hub_exists = any(
             entry.data.get("entry_type") == ENTRY_TYPE_HUB
             for entry in self._async_current_entries()
         )
         
-        if user_input is not None:
-            if user_input["type"] == ENTRY_TYPE_HUB:
-                return await self.async_step_hub()
-            else:
-                return await self.async_step_immich()
-        
-        # Build menu options
-        options = {}
+        # If no hub exists, create it first then continue to Immich
         if not hub_exists:
-            options[ENTRY_TYPE_HUB] = "Add PhotoDream Hub (for tablets)"
-        options[ENTRY_TYPE_IMMICH] = "Add Immich Server (photo source)"
+            return await self.async_step_create_hub()
         
-        if not options:
-            return self.async_abort(reason="already_configured")
-        
-        # If only one option, go directly there
-        if len(options) == 1:
-            only_option = list(options.keys())[0]
-            if only_option == ENTRY_TYPE_HUB:
-                return await self.async_step_hub()
-            else:
-                return await self.async_step_immich()
-        
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema({
-                vol.Required("type"): vol.In(options),
-            }),
-        )
-
-    async def async_step_hub(
+        # Hub exists, go directly to Immich setup
+        return await self.async_step_immich()
+    
+    async def async_step_create_hub(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Set up the PhotoDream Hub."""
-        # Check if hub already exists
-        for entry in self._async_current_entries():
-            if entry.data.get("entry_type") == ENTRY_TYPE_HUB:
-                return self.async_abort(reason="hub_already_exists")
-        
+        """Create the Hub and continue to Immich setup."""
         if user_input is not None:
+            # User confirmed, create hub entry
+            # We need to create hub as separate entry, then start new flow for Immich
+            self._hub_created = True
             return self.async_create_entry(
                 title="PhotoDream",
                 data={
@@ -156,12 +131,11 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
             )
         
+        # Show confirmation that hub will be created
         return self.async_show_form(
-            step_id="hub",
+            step_id="create_hub",
             data_schema=vol.Schema({}),
-            description_placeholders={
-                "info": "The Hub manages your PhotoDream tablets. Tablets will register automatically via network discovery."
-            },
+            description_placeholders={},
         )
 
     async def async_step_immich(

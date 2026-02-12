@@ -3,14 +3,11 @@
     "step": {
       "user": {
         "title": "PhotoDream Setup",
-        "description": "What would you like to add?",
-        "data": {
-          "type": "Component Type"
-        }
+        "description": "Add an Immich server to PhotoDream."
       },
-      "hub": {
-        "title": "PhotoDream Hub",
-        "description": "The Hub manages your PhotoDream tablets.\n\nTablets will register automatically via network discovery when they connect."
+      "create_hub": {
+        "title": "Create PhotoDream Hub",
+        "description": "The PhotoDream Hub manages your tablets and will be created now.\n\nTablets will register automatically when they connect to Home Assistant.\n\nAfter this, you'll be asked to add an Immich server as photo source."
       },
       "immich": {
         "title": "Add Immich Server",
@@ -52,10 +49,10 @@
       "cannot_connect": "Cannot connect to Immich server. Please check URL and API key."
     },
     "abort": {
-      "hub_already_exists": "PhotoDream Hub already exists. Only one hub is allowed.",
+      "hub_created": "PhotoDream Hub created successfully!\n\nNow add an Immich server: Go to Settings → Devices & Services → PhotoDream → Add Entry",
       "device_configured": "Device has been configured and will start showing photos.",
       "no_device": "No device information available.",
-      "no_hub": "Please add a PhotoDream Hub first.",
+      "no_hub": "Please add PhotoDream first (Hub will be created automatically).",
       "no_profiles": "Please add an Immich server with profiles first.",
       "already_configured": "This device is already configured.",
       "no_data": "No data provided for import."
