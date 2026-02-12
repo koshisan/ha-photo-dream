@@ -98,5 +98,7 @@ ATTR_APP_VERSION: Final = "app_version"
 WEBHOOK_REGISTER: Final = "photo_dream_register"
 WEBHOOK_STATUS: Final = "photo_dream_status"
 
-# Global config
+# Weather config
 CONF_WEATHER_ENTITY: Final = "weather_entity"
+CONF_WEATHER_ENABLED: Final = "weather_enabled"
+DEFAULT_WEATHER_ENABLED: Final = False

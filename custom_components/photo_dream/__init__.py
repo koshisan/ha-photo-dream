@@ -27,6 +27,7 @@ from .const import (
     CONF_PROFILE_ID,
     CONF_SEARCH_FILTER,
     CONF_EXCLUDE_PATHS,
+    CONF_WEATHER_ENTITY,
     DEFAULT_PORT,
     SERVICE_NEXT_IMAGE,
     SERVICE_REFRESH_CONFIG,
@@ -408,6 +409,23 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
         hass, f"{WEBHOOK_STATUS}_{entry.entry_id}"
     )
     
+    # Get weather data if configured
+    weather_config = None
+    weather_entity_id = device.get(CONF_WEATHER_ENTITY)
+    if weather_entity_id:
+        weather_state = hass.states.get(weather_entity_id)
+        if weather_state:
+            # Get temperature unit from HA config
+            temp_unit = hass.config.units.temperature_unit
+            weather_config = {
+                "enabled": True,
+                "entity_id": weather_entity_id,
+                "condition": weather_state.state,
+                "temperature": weather_state.attributes.get("temperature"),
+                "temperature_unit": temp_unit,
+            }
+            _LOGGER.debug("Weather for %s: %s", device_id, weather_config)
+    
     return {
         "device_id": device_id,
         "immich": {
@@ -421,7 +439,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             "clock_font_size": device.get("clock_font_size", 32),
             "date": device.get("date", False),
             "date_format": device.get("date_format", "dd.MM.yyyy"),
-            "weather": device.get("weather", False),
+            "weather": weather_config,
             "interval_seconds": device.get("interval_seconds", 30),
             "pan_speed": device.get("pan_speed", 0.5),
             "mode": device.get("display_mode", "smart_shuffle"),

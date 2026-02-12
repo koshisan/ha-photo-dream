@@ -22,6 +22,7 @@ from .const import (
     CONF_CLOCK_FORMAT,
     CONF_DATE_FORMAT,
     CONF_DISPLAY_MODE,
+    CONF_WEATHER_ENTITY,
     DEFAULT_CLOCK_POSITION,
     DEFAULT_CLOCK_FORMAT,
     DEFAULT_DATE_FORMAT,
@@ -66,6 +67,7 @@ async def async_setup_entry(
         entities.append(PhotoDreamClockFormatSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamDateFormatSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamDisplayModeSelect(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamWeatherEntitySelect(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -309,5 +311,67 @@ class PhotoDreamDisplayModeSelect(PhotoDreamBaseSelect):
     async def async_select_option(self, option: str) -> None:
         """Change the display mode."""
         self._update_device_config(CONF_DISPLAY_MODE, option)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamWeatherEntitySelect(PhotoDreamBaseSelect):
+    """Select entity for choosing weather entity on a PhotoDream device."""
+
+    _attr_name = "Weather Entity"
+    _attr_icon = "mdi:weather-partly-cloudy"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the select entity."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_weather_entity"
+        self._update_options()
+
+    def _update_options(self) -> None:
+        """Update available weather entity options."""
+        weather_entities = ["None"]  # Allow disabling weather
+        
+        # Find all weather entities
+        for state in self.hass.states.async_all("weather"):
+            friendly_name = state.attributes.get("friendly_name", state.entity_id)
+            weather_entities.append(f"{friendly_name} ({state.entity_id})")
+        
+        self._weather_map = {}  # {display_name: entity_id}
+        self._weather_map["None"] = None
+        for state in self.hass.states.async_all("weather"):
+            friendly_name = state.attributes.get("friendly_name", state.entity_id)
+            display = f"{friendly_name} ({state.entity_id})"
+            self._weather_map[display] = state.entity_id
+        
+        self._attr_options = list(self._weather_map.keys())
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current weather entity."""
+        entity_id = self._get_device_config().get(CONF_WEATHER_ENTITY)
+        if not entity_id:
+            return "None"
+        
+        # Find display name for entity_id
+        for display, eid in self._weather_map.items():
+            if eid == entity_id:
+                return display
+        
+        # Entity not found in map, return entity_id directly
+        return entity_id
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the weather entity."""
+        entity_id = self._weather_map.get(option)
+        
+        _LOGGER.info("Setting weather entity to %s for device %s", entity_id, self._device_id)
+        
+        self._update_device_config(CONF_WEATHER_ENTITY, entity_id)
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
