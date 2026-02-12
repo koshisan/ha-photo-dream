@@ -1,8 +1,11 @@
 """PhotoDream integration for Home Assistant."""
 from __future__ import annotations
 
+import json
 import logging
+import re
 from typing import Any
+from urllib.parse import urlparse, parse_qs, unquote
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
@@ -39,6 +42,74 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+def parse_immich_url(url_or_filter: Any) -> dict:
+    """Parse Immich URL into search filter format.
+    
+    Supported URL formats:
+    - https://immich.example.com/people/{person_id} -> {"personIds": ["{person_id}"]}
+    - https://immich.example.com/albums/{album_id} -> {"albumId": "{album_id}"}
+    - https://immich.example.com/search?query={json} -> parsed JSON
+    - Regular dict -> returned as-is
+    """
+    # If already a dict, return as-is
+    if isinstance(url_or_filter, dict):
+        return url_or_filter
+    
+    # If not a string, return empty
+    if not isinstance(url_or_filter, str):
+        return {}
+    
+    url_str = url_or_filter.strip()
+    if not url_str:
+        return {}
+    
+    # Check if it's a URL
+    if url_str.startswith(("http://", "https://")):
+        try:
+            parsed = urlparse(url_str)
+            path = parsed.path
+            
+            # /people/{person_id}
+            people_match = re.match(r"/people/([a-f0-9-]+)", path)
+            if people_match:
+                person_id = people_match.group(1)
+                _LOGGER.debug("Parsed people URL: personIds=[%s]", person_id)
+                return {"personIds": [person_id]}
+            
+            # /albums/{album_id}
+            albums_match = re.match(r"/albums/([a-f0-9-]+)", path)
+            if albums_match:
+                album_id = albums_match.group(1)
+                _LOGGER.debug("Parsed albums URL: albumId=%s", album_id)
+                return {"albumId": album_id}
+            
+            # /search?query={json}
+            if path == "/search" and parsed.query:
+                query_params = parse_qs(parsed.query)
+                if "query" in query_params:
+                    query_json = unquote(query_params["query"][0])
+                    try:
+                        search_filter = json.loads(query_json)
+                        _LOGGER.debug("Parsed search URL: %s", search_filter)
+                        return search_filter
+                    except json.JSONDecodeError:
+                        _LOGGER.warning("Failed to parse search query JSON: %s", query_json)
+            
+            _LOGGER.warning("Unknown Immich URL format: %s", url_str)
+            return {"query": url_str}  # Fallback: treat as semantic query
+            
+        except Exception as e:
+            _LOGGER.warning("Failed to parse Immich URL: %s - %s", url_str, e)
+            return {"query": url_str}
+    
+    # Not a URL - try to parse as JSON
+    try:
+        return json.loads(url_str)
+    except json.JSONDecodeError:
+        # Treat as semantic search query text
+        return {"query": url_str}
+
 
 # Platforms for Hub entries (tablets)
 HUB_PLATFORMS: list[Platform] = [
@@ -464,7 +535,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
         "profile": {
             "id": profile_id,
             "name": profile_name,
-            "search_filter": profile_config.get(CONF_SEARCH_FILTER, {}),
+            "search_filter": parse_immich_url(profile_config.get(CONF_SEARCH_FILTER, {})),
             "exclude_paths": profile_config.get(CONF_EXCLUDE_PATHS, []),
         },
         "webhook_url": status_webhook_url,

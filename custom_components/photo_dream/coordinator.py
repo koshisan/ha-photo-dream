@@ -23,6 +23,7 @@ from .const import (
     CONF_SEARCH_FILTER,
     CONF_DEVICES,
 )
+from . import parse_immich_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,7 +63,8 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         counts_changed = False
         
         for profile_name, profile_config in profiles.items():
-            search_filter = profile_config.get(CONF_SEARCH_FILTER, {})
+            raw_filter = profile_config.get(CONF_SEARCH_FILTER, {})
+            search_filter = parse_immich_url(raw_filter)
             
             try:
                 count = await self._get_image_count(immich_url, api_key, search_filter)
