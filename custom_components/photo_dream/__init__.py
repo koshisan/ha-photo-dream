@@ -128,26 +128,17 @@ async def create_profile_devices(hass: HomeAssistant, entry: ConfigEntry) -> Non
     for profile_name in profiles:
         profile_id = f"{entry.entry_id}_{profile_name}".replace(" ", "_").lower()
         
+        # Create profile as a device directly under this config entry
+        # (no via_device needed - HA handles the hierarchy automatically)
         device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, f"profile_{profile_id}")},
-            name=f"{profile_name}",
+            name=profile_name,
             manufacturer="PhotoDream",
             model="Immich Profile",
             sw_version="1.0",
-            via_device=(DOMAIN, f"immich_{entry.entry_id}"),
         )
         _LOGGER.info("Created profile device: %s", profile_name)
-    
-    # Create the Immich instance hub device
-    device_registry.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, f"immich_{entry.entry_id}")},
-        name=f"Immich: {immich_name}",
-        manufacturer="Immich",
-        model="Photo Server",
-        configuration_url=entry.data.get(CONF_IMMICH_URL),
-    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
