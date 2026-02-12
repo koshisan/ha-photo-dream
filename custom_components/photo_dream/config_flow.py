@@ -56,19 +56,60 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def parse_immich_search_input(input_str: str) -> dict:
-    """Parse Immich search URL or JSON into a search filter dict."""
-    input_str = input_str.strip()
+    """Parse Immich search URL or JSON into a search filter dict.
     
-    if input_str.startswith("http"):
+    Supported formats:
+    - https://immich.example.com/people/{person_id} -> {"personIds": ["{person_id}"]}
+    - https://immich.example.com/albums/{album_id} -> {"albumId": "{album_id}"}
+    - https://immich.example.com/search?query={json} -> parsed JSON
+    - URL-encoded JSON
+    - Plain JSON string
+    - Plain text -> {"query": "text"} (semantic search)
+    """
+    import re
+    input_str = input_str.strip()
+    if not input_str:
+        return {}
+    
+    # Check if it's a URL
+    if input_str.startswith(("http://", "https://")):
         try:
             parsed = urlparse(input_str)
-            query_params = parse_qs(parsed.query)
-            if "query" in query_params:
-                json_str = unquote(query_params["query"][0])
-                return json.loads(json_str)
+            path = parsed.path
+            
+            # /people/{person_id}
+            people_match = re.match(r"/people/([a-f0-9-]+)", path)
+            if people_match:
+                person_id = people_match.group(1)
+                _LOGGER.debug("Parsed people URL: personIds=[%s]", person_id)
+                return {"personIds": [person_id]}
+            
+            # /albums/{album_id}
+            albums_match = re.match(r"/albums/([a-f0-9-]+)", path)
+            if albums_match:
+                album_id = albums_match.group(1)
+                _LOGGER.debug("Parsed albums URL: albumId=%s", album_id)
+                return {"albumId": album_id}
+            
+            # /search?query={json}
+            if parsed.query:
+                query_params = parse_qs(parsed.query)
+                if "query" in query_params:
+                    json_str = unquote(query_params["query"][0])
+                    try:
+                        result = json.loads(json_str)
+                        _LOGGER.debug("Parsed search URL: %s", result)
+                        return result
+                    except json.JSONDecodeError:
+                        pass
+            
+            _LOGGER.warning("Unknown Immich URL format: %s", input_str)
+            return {"query": input_str}
+            
         except Exception as e:
             _LOGGER.debug("Failed to parse as URL: %s", e)
     
+    # URL-encoded JSON
     if "%7B" in input_str or "%22" in input_str:
         try:
             decoded = unquote(input_str)
