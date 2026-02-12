@@ -49,8 +49,11 @@ HUB_PLATFORMS: list[Platform] = [
     Platform.NUMBER,
 ]
 
-# Platforms for Immich entries (profiles) - could add sensors later
-IMMICH_PLATFORMS: list[Platform] = []
+# Platforms for Immich entries (profiles)
+IMMICH_PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.BUTTON,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -105,16 +108,21 @@ async def async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool
 
 async def async_setup_immich_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up an Immich instance (profile source)."""
+    from .coordinator import async_get_coordinator
+    
+    # Create coordinator for polling image counts
+    coordinator = await async_get_coordinator(hass, entry)
+    
     hass.data[DOMAIN]["immich"][entry.entry_id] = {
         "entry": entry,
+        "coordinator": coordinator,
     }
     
     # Create profile devices in registry
     await create_profile_devices(hass, entry)
     
-    # Setup platforms (if any)
-    if IMMICH_PLATFORMS:
-        await hass.config_entries.async_forward_entry_setups(entry, IMMICH_PLATFORMS)
+    # Setup platforms
+    await hass.config_entries.async_forward_entry_setups(entry, IMMICH_PLATFORMS)
     
     return True
 

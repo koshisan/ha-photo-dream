@@ -2,18 +2,23 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DOMAIN,
     ENTRY_TYPE_HUB,
+    ENTRY_TYPE_IMMICH,
     CONF_DEVICES,
+    CONF_PROFILES,
     CONF_PROFILE_ID,
+    CONF_IMMICH_NAME,
     ATTR_CURRENT_IMAGE,
     ATTR_CURRENT_IMAGE_URL,
     ATTR_PROFILE,
@@ -35,10 +40,20 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up PhotoDream sensors from a config entry."""
-    # Only create sensors for Hub entries
-    if entry.data.get("entry_type") != ENTRY_TYPE_HUB:
-        return
+    entry_type = entry.data.get("entry_type")
     
+    if entry_type == ENTRY_TYPE_HUB:
+        await async_setup_hub_sensors(hass, entry, async_add_entities)
+    elif entry_type == ENTRY_TYPE_IMMICH:
+        await async_setup_immich_sensors(hass, entry, async_add_entities)
+
+
+async def async_setup_hub_sensors(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up tablet sensors for Hub entry."""
     devices = entry.data.get(CONF_DEVICES, {})
     
     entities = []
@@ -256,3 +271,100 @@ class PhotoDreamVersionSensor(PhotoDreamBaseSensor):
         """Return the app version."""
         device_data = self._get_device_data()
         return device_data.get(ATTR_APP_VERSION) if device_data else None
+
+
+# ============================================================================
+# Immich Profile Sensors
+# ============================================================================
+
+async def async_setup_immich_sensors(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up profile sensors for Immich entry."""
+    immich_data = hass.data.get(DOMAIN, {}).get("immich", {}).get(entry.entry_id)
+    if not immich_data:
+        _LOGGER.error("No Immich data found for entry %s", entry.entry_id)
+        return
+    
+    coordinator = immich_data.get("coordinator")
+    if not coordinator:
+        _LOGGER.error("No coordinator found for Immich entry %s", entry.entry_id)
+        return
+    
+    profiles = entry.data.get(CONF_PROFILES, {})
+    immich_name = entry.data.get(CONF_IMMICH_NAME, "Immich")
+    
+    entities = []
+    for profile_name in profiles:
+        profile_id = f"{entry.entry_id}_{profile_name}".replace(" ", "_").lower()
+        entities.append(ProfileImageCountSensor(coordinator, entry, profile_name, profile_id))
+        entities.append(ProfileLastRefreshSensor(coordinator, entry, profile_name, profile_id))
+    
+    async_add_entities(entities)
+
+
+class ProfileImageCountSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing image count for a profile."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Image Count"
+    _attr_icon = "mdi:image-multiple"
+
+    def __init__(
+        self,
+        coordinator,
+        entry: ConfigEntry,
+        profile_name: str,
+        profile_id: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._profile_name = profile_name
+        self._profile_id = profile_id
+        self._attr_unique_id = f"profile_{profile_id}_image_count"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"profile_{profile_id}")},
+        }
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the image count."""
+        if self.coordinator.data and self._profile_name in self.coordinator.data:
+            return self.coordinator.data[self._profile_name].get("image_count")
+        return None
+
+
+class ProfileLastRefreshSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing when profile was last refreshed."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Last Refresh"
+    _attr_icon = "mdi:clock-outline"
+    _attr_device_class = "timestamp"
+
+    def __init__(
+        self,
+        coordinator,
+        entry: ConfigEntry,
+        profile_name: str,
+        profile_id: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._profile_name = profile_name
+        self._profile_id = profile_id
+        self._attr_unique_id = f"profile_{profile_id}_last_refresh"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"profile_{profile_id}")},
+        }
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the last refresh time."""
+        if self.coordinator.last_update_success_time:
+            return self.coordinator.last_update_success_time
+        return None
