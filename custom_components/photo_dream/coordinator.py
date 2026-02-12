@@ -106,65 +106,31 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> int:
         """Query Immich API to get image count for a search filter.
         
-        Immich doesn't return true total count, so we paginate to count.
-        Uses /api/search/smart if query is present, otherwise /api/search/metadata.
+        Uses /api/search/statistics which returns total count with filters.
         """
+        url = f"{immich_url}/api/search/statistics"
         headers = {"x-api-key": api_key, "Content-Type": "application/json"}
         
-        # Choose endpoint based on whether we have a semantic query
-        has_query = search_filter and search_filter.get("query")
-        endpoint = "smart" if has_query else "metadata"
-        url = f"{immich_url}/api/search/{endpoint}"
-        
-        total_count = 0
-        page = 1
-        page_size = 1000  # Max supported by Immich
+        # Build payload from search filter
+        payload = dict(search_filter) if search_filter else {}
         
         try:
             async with aiohttp.ClientSession() as session:
-                while True:
-                    payload = dict(search_filter) if search_filter else {}
-                    payload["size"] = page_size
-                    payload["page"] = page
-                    payload["type"] = payload.get("type", "IMAGE")
-                    
-                    async with session.post(
-                        url,
-                        headers=headers,
-                        json=payload,
-                        timeout=30,
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            assets = data.get("assets", {})
-                            items = assets.get("items", [])
-                            count = len(items)
-                            total_count += count
-                            next_page = assets.get("nextPage")
-                            
-                            _LOGGER.debug(
-                                "Image count page %d: got %d, total so far: %d, nextPage: %s",
-                                page, count, total_count, next_page
-                            )
-                            
-                            # Stop if no more pages
-                            if not next_page or count == 0:
-                                break
-                            
-                            page += 1
-                            
-                            # Safety limit
-                            if page > 100:
-                                _LOGGER.warning("Image count pagination limit reached")
-                                break
-                        else:
-                            text = await resp.text()
-                            _LOGGER.error("Immich API error %d: %s", resp.status, text)
-                            raise UpdateFailed(f"Immich API returned {resp.status}")
-                
-                _LOGGER.debug("Total image count for filter: %d", total_count)
-                return total_count
-                
+                async with session.post(
+                    url,
+                    headers=headers,
+                    json=payload,
+                    timeout=30,
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        total = data.get("total", 0)
+                        _LOGGER.debug("Image count for filter: %d", total)
+                        return total
+                    else:
+                        text = await resp.text()
+                        _LOGGER.error("Immich API error %d: %s", resp.status, text)
+                        raise UpdateFailed(f"Immich API returned {resp.status}")
         except aiohttp.ClientError as e:
             raise UpdateFailed(f"Cannot connect to Immich: {e}")
 
