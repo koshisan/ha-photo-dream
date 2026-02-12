@@ -331,29 +331,38 @@ class PhotoDreamWeatherEntitySelect(PhotoDreamBaseSelect):
         """Initialize the select entity."""
         super().__init__(hass, entry, device_id, device_config)
         self._attr_unique_id = f"{entry.entry_id}_{device_id}_weather_entity"
+        self._weather_map = {"None": None}
+        self._attr_options = ["None"]
+
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass, update options."""
+        await super().async_added_to_hass()
         self._update_options()
 
     def _update_options(self) -> None:
         """Update available weather entity options."""
-        weather_entities = ["None"]  # Allow disabling weather
+        self._weather_map = {"None": None}
         
         # Find all weather entities
-        for state in self.hass.states.async_all("weather"):
-            friendly_name = state.attributes.get("friendly_name", state.entity_id)
-            weather_entities.append(f"{friendly_name} ({state.entity_id})")
-        
-        self._weather_map = {}  # {display_name: entity_id}
-        self._weather_map["None"] = None
         for state in self.hass.states.async_all("weather"):
             friendly_name = state.attributes.get("friendly_name", state.entity_id)
             display = f"{friendly_name} ({state.entity_id})"
             self._weather_map[display] = state.entity_id
         
         self._attr_options = list(self._weather_map.keys())
+        _LOGGER.debug("Weather entity options: %s", self._attr_options)
+
+    @property
+    def options(self) -> list[str]:
+        """Return options, refreshing if needed."""
+        if len(self._attr_options) <= 1:
+            self._update_options()
+        return self._attr_options
 
     @property
     def current_option(self) -> str | None:
         """Return the current weather entity."""
+        self._update_options()  # Refresh options
         entity_id = self._get_device_config().get(CONF_WEATHER_ENTITY)
         if not entity_id:
             return "None"
@@ -368,6 +377,7 @@ class PhotoDreamWeatherEntitySelect(PhotoDreamBaseSelect):
 
     async def async_select_option(self, option: str) -> None:
         """Change the weather entity."""
+        self._update_options()  # Make sure map is fresh
         entity_id = self._weather_map.get(option)
         
         _LOGGER.info("Setting weather entity to %s for device %s", entity_id, self._device_id)
