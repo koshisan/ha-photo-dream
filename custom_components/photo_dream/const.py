@@ -102,3 +102,7 @@ WEBHOOK_STATUS: Final = "photo_dream_status"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_WEATHER_ENABLED: Final = "weather_enabled"
 DEFAULT_WEATHER_ENABLED: Final = False
+
+# Update config
+GITHUB_REPO: Final = "koshisan/PhotoDream"
+GITHUB_API_RELEASES: Final = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"

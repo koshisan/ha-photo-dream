@@ -119,6 +119,7 @@ HUB_PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.SWITCH,
     Platform.NUMBER,
+    Platform.UPDATE,
 ]
 
 # Platforms for Immich entries (profiles)
