@@ -21,9 +21,11 @@ from .const import (
     CONF_IMMICH_API_KEY,
     CONF_PROFILES,
     CONF_SEARCH_FILTER,
+    CONF_EXCLUDE_PATHS,
     CONF_DEVICES,
 )
 from . import parse_immich_url
+import fnmatch
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,9 +67,10 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for profile_name, profile_config in profiles.items():
             raw_filter = profile_config.get(CONF_SEARCH_FILTER, {})
             search_filter = parse_immich_url(raw_filter)
+            exclude_paths = profile_config.get(CONF_EXCLUDE_PATHS, [])
             
             try:
-                count = await self._get_image_count(immich_url, api_key, search_filter)
+                count = await self._get_image_count(immich_url, api_key, search_filter, exclude_paths)
                 profile_id = f"{self.entry.entry_id}_{profile_name}".replace(" ", "_").lower()
                 
                 result[profile_name] = {
@@ -104,35 +107,121 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return result
 
     async def _get_image_count(
-        self, immich_url: str, api_key: str, search_filter: dict
+        self, immich_url: str, api_key: str, search_filter: dict, exclude_paths: list[str]
     ) -> int:
         """Query Immich API to get image count for a search filter.
         
-        Uses /api/search/statistics which returns total count with filters.
+        If exclude_paths is empty, uses fast /api/search/statistics endpoint.
+        If exclude_paths is set, fetches all assets and filters client-side.
         """
-        url = f"{immich_url}/api/search/statistics"
         headers = {"x-api-key": api_key, "Content-Type": "application/json"}
         
-        # Build payload from search filter
-        payload = dict(search_filter) if search_filter else {}
+        # Fast path: no excludes, use statistics endpoint
+        if not exclude_paths:
+            url = f"{immich_url}/api/search/statistics"
+            payload = dict(search_filter) if search_filter else {}
+            
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        url,
+                        headers=headers,
+                        json=payload,
+                        timeout=30,
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            total = data.get("total", 0)
+                            _LOGGER.debug("Image count for filter (fast): %d", total)
+                            return total
+                        else:
+                            text = await resp.text()
+                            _LOGGER.error("Immich API error %d: %s", resp.status, text)
+                            raise UpdateFailed(f"Immich API returned {resp.status}")
+            except aiohttp.ClientError as e:
+                raise UpdateFailed(f"Cannot connect to Immich: {e}")
+        
+        # Slow path: has excludes, need to fetch and filter
+        return await self._get_filtered_count(immich_url, api_key, search_filter, exclude_paths)
+    
+    async def _get_filtered_count(
+        self, immich_url: str, api_key: str, search_filter: dict, exclude_paths: list[str]
+    ) -> int:
+        """Fetch all assets and count after applying exclude_paths filter."""
+        headers = {"x-api-key": api_key, "Content-Type": "application/json"}
+        
+        # Convert exclude patterns (remove trailing *)
+        exclude_patterns = [p.rstrip("*").rstrip("/") for p in exclude_paths]
+        
+        total_count = 0
+        excluded_count = 0
+        page = 1
+        page_size = 1000  # Larger pages for counting
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    headers=headers,
-                    json=payload,
-                    timeout=30,
-                ) as resp:
-                    if resp.status == 200:
+                while True:
+                    # Use smart search with pagination
+                    url = f"{immich_url}/api/search/smart"
+                    payload = {
+                        "query": search_filter.get("query", "*") if search_filter else "*",
+                        "page": page,
+                        "size": page_size,
+                        "type": search_filter.get("type", "IMAGE") if search_filter else "IMAGE",
+                    }
+                    
+                    # Add optional filters
+                    if search_filter:
+                        for key in ["personIds", "tagIds", "albumId", "city", "country", 
+                                    "state", "takenAfter", "takenBefore", "isArchived", "isFavorite"]:
+                            if key in search_filter and search_filter[key] is not None:
+                                payload[key] = search_filter[key]
+                    
+                    async with session.post(url, headers=headers, json=payload, timeout=60) as resp:
+                        if resp.status != 200:
+                            text = await resp.text()
+                            _LOGGER.error("Immich search API error %d: %s", resp.status, text)
+                            raise UpdateFailed(f"Immich API returned {resp.status}")
+                        
                         data = await resp.json()
-                        total = data.get("total", 0)
-                        _LOGGER.debug("Image count for filter: %d", total)
-                        return total
-                    else:
-                        text = await resp.text()
-                        _LOGGER.error("Immich API error %d: %s", resp.status, text)
-                        raise UpdateFailed(f"Immich API returned {resp.status}")
+                        assets = data.get("assets", {}).get("items", [])
+                        
+                        if not assets:
+                            break
+                        
+                        # Filter out excluded paths
+                        for asset in assets:
+                            original_path = asset.get("originalPath", "")
+                            is_excluded = any(
+                                original_path.startswith(pattern) or pattern in original_path
+                                for pattern in exclude_patterns
+                            )
+                            
+                            if is_excluded:
+                                excluded_count += 1
+                            else:
+                                total_count += 1
+                        
+                        # Check if more pages
+                        total_available = data.get("assets", {}).get("total", 0)
+                        fetched_so_far = page * page_size
+                        
+                        if fetched_so_far >= total_available or len(assets) < page_size:
+                            break
+                        
+                        page += 1
+                        
+                        # Safety limit
+                        if page > 50:
+                            _LOGGER.warning("Reached pagination limit (50 pages) while counting")
+                            break
+                
+                _LOGGER.debug(
+                    "Image count with excludes: %d (excluded %d)", 
+                    total_count, excluded_count
+                )
+                return total_count
+                
         except aiohttp.ClientError as e:
             raise UpdateFailed(f"Cannot connect to Immich: {e}")
 

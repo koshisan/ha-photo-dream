@@ -265,6 +265,11 @@ async def async_unload_immich_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
             _LOGGER.debug("Removed profile device: %s", profile_name)
     
     hass.data[DOMAIN]["immich"].pop(entry.entry_id, None)
+    
+    # Remove coordinator from cache so it gets recreated on reload
+    coordinators = hass.data[DOMAIN].get("coordinators", {})
+    coordinators.pop(entry.entry_id, None)
+    
     return True
 
 

@@ -20,6 +20,7 @@ from .const import (
     CONF_PROFILE_ID,
     CONF_IMMICH_NAME,
     CONF_SEARCH_FILTER,
+    CONF_EXCLUDE_PATHS,
     ATTR_CURRENT_IMAGE,
     ATTR_CURRENT_IMAGE_URL,
     ATTR_PROFILE,
@@ -303,6 +304,7 @@ async def async_setup_immich_sensors(
         entities.append(ProfileImageCountSensor(coordinator, entry, profile_name, profile_id))
         entities.append(ProfileLastRefreshSensor(coordinator, entry, profile_name, profile_id))
         entities.append(ProfileSearchFilterSensor(coordinator, entry, profile_name, profile_id, profile_config))
+        entities.append(ProfileExcludePathsSensor(coordinator, entry, profile_name, profile_id, profile_config))
     
     async_add_entities(entities)
 
@@ -427,4 +429,46 @@ class ProfileSearchFilterSensor(CoordinatorEntity, SensorEntity):
         return {
             "raw_input": raw_filter if isinstance(raw_filter, str) else None,
             "parsed_filter": parsed,
+        }
+
+
+class ProfileExcludePathsSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing the exclude paths for a profile."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Exclude Paths"
+    _attr_icon = "mdi:folder-remove"
+
+    def __init__(
+        self,
+        coordinator,
+        entry: ConfigEntry,
+        profile_name: str,
+        profile_id: str,
+        profile_config: dict,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._profile_name = profile_name
+        self._profile_id = profile_id
+        self._profile_config = profile_config
+        self._attr_unique_id = f"profile_{profile_id}_exclude_paths"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"profile_{profile_id}")},
+        }
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of exclude paths."""
+        exclude_paths = self._profile_config.get(CONF_EXCLUDE_PATHS, [])
+        return len(exclude_paths)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the exclude paths as attributes."""
+        exclude_paths = self._profile_config.get(CONF_EXCLUDE_PATHS, [])
+        return {
+            "paths": exclude_paths,
+            "patterns": [p.replace("*", "") for p in exclude_paths],
         }
