@@ -161,14 +161,25 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             async with aiohttp.ClientSession() as session:
                 while True:
-                    # Use smart search with pagination
-                    url = f"{immich_url}/api/search/smart"
-                    payload = {
-                        "query": search_filter.get("query", "*") if search_filter else "*",
-                        "page": page,
-                        "size": page_size,
-                        "type": search_filter.get("type", "IMAGE") if search_filter else "IMAGE",
-                    }
+                    # Use metadata search for filtered counting (smart search has CLIP limits)
+                    # If search_filter has a "query" key, use smart search; otherwise metadata
+                    has_query = search_filter and search_filter.get("query")
+                    
+                    if has_query:
+                        url = f"{immich_url}/api/search/smart"
+                        payload = {
+                            "query": search_filter["query"],
+                            "page": page,
+                            "size": page_size,
+                            "type": search_filter.get("type", "IMAGE"),
+                        }
+                    else:
+                        url = f"{immich_url}/api/search/metadata"
+                        payload = {
+                            "page": page,
+                            "size": page_size,
+                            "type": search_filter.get("type", "IMAGE") if search_filter else "IMAGE",
+                        }
                     
                     # Add optional filters
                     if search_filter:
@@ -202,18 +213,15 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             else:
                                 total_count += 1
                         
-                        # Check if more pages
-                        total_available = data.get("assets", {}).get("total", 0)
-                        fetched_so_far = page * page_size
-                        
-                        if fetched_so_far >= total_available or len(assets) < page_size:
+                        # Check if more pages (API total is unreliable, use item count)
+                        if len(assets) < page_size:
                             break
                         
                         page += 1
                         
-                        # Safety limit
-                        if page > 50:
-                            _LOGGER.warning("Reached pagination limit (50 pages) while counting")
+                        # Safety limit (200 pages = 200k images max)
+                        if page > 200:
+                            _LOGGER.warning("Reached pagination limit (200 pages) while counting")
                             break
                 
                 _LOGGER.debug(
