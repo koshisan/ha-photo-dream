@@ -39,6 +39,7 @@ from .const import (
     ATTR_PROFILE_ID,
     WEBHOOK_REGISTER,
     WEBHOOK_STATUS,
+    WEBHOOK_KEY_EVENT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -171,6 +172,16 @@ async def async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool
     )
     _LOGGER.info("Registered status webhook: %s", status_webhook_id)
     
+    # Register webhook for key events from AccessibilityService
+    webhook.async_register(
+        hass,
+        DOMAIN,
+        "PhotoDream Key Event",
+        WEBHOOK_KEY_EVENT,
+        handle_key_event_webhook,
+    )
+    _LOGGER.info("Registered key event webhook: %s", WEBHOOK_KEY_EVENT)
+    
     # Setup platforms
     await hass.config_entries.async_forward_entry_setups(entry, HUB_PLATFORMS)
     
@@ -238,6 +249,7 @@ async def async_unload_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
     # Unregister webhooks
     webhook.async_unregister(hass, WEBHOOK_REGISTER)
     webhook.async_unregister(hass, f"{WEBHOOK_STATUS}_{entry.entry_id}")
+    webhook.async_unregister(hass, WEBHOOK_KEY_EVENT)
     
     # Unload platforms
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, HUB_PLATFORMS):
@@ -402,6 +414,38 @@ async def handle_status_webhook(
         
     except Exception as e:
         _LOGGER.error("Error handling status webhook: %s", e)
+        return aiohttp.web.Response(status=500, text=str(e))
+
+
+async def handle_key_event_webhook(
+    hass: HomeAssistant, webhook_id: str, request: aiohttp.web.Request
+) -> aiohttp.web.Response:
+    """Handle key event webhook from PhotoDream AccessibilityService."""
+    try:
+        data = await request.json()
+        device_id = data.get("device_id")
+        key_code = data.get("key_code")
+        key_name = data.get("key_name")
+        
+        if not device_id or key_code is None:
+            return aiohttp.web.Response(status=400, text="Missing device_id or key_code")
+        
+        _LOGGER.debug("Key event from %s: %s (%s)", device_id, key_name, key_code)
+        
+        # Fire Home Assistant event that automations can trigger on
+        hass.bus.async_fire(
+            f"{DOMAIN}_key_event",
+            {
+                "device_id": device_id,
+                "key_code": key_code,
+                "key_name": key_name,
+            },
+        )
+        
+        return aiohttp.web.json_response({"status": "ok"})
+        
+    except Exception as e:
+        _LOGGER.error("Error handling key event webhook: %s", e)
         return aiohttp.web.Response(status=500, text=str(e))
 
 

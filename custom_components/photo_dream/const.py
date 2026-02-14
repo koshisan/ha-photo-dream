@@ -97,6 +97,7 @@ ATTR_APP_VERSION: Final = "app_version"
 # Webhooks
 WEBHOOK_REGISTER: Final = "photo_dream_register"
 WEBHOOK_STATUS: Final = "photo_dream_status"
+WEBHOOK_KEY_EVENT: Final = "photo_dream_key_event"
 
 # Weather config
 CONF_WEATHER_ENTITY: Final = "weather_entity"
