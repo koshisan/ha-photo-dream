@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -208,6 +208,27 @@ class PhotoDreamAutoBrightnessSwitch(SwitchEntity):
         self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
         self._is_on: bool = False  # Default until first poll
         self._supported: bool = True
+        self._remove_listener: Any = None
+    
+    async def async_added_to_hass(self) -> None:
+        """Register event listener when added to hass."""
+        from .const import DOMAIN
+        
+        async def handle_brightness_changed(event):
+            """Handle brightness change event - refresh our state."""
+            if event.data.get("device_id") == self._device_id:
+                await self.async_update()
+                self.async_write_ha_state()
+        
+        self._remove_listener = self.hass.bus.async_listen(
+            f"{DOMAIN}_brightness_changed",
+            handle_brightness_changed
+        )
+    
+    async def async_will_remove_from_hass(self) -> None:
+        """Remove event listener when removed from hass."""
+        if self._remove_listener:
+            self._remove_listener()
 
     @property
     def is_on(self) -> bool:

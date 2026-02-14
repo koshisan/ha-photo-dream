@@ -235,3 +235,9 @@ class PhotoDreamBrightnessNumber(NumberEntity):
         if success:
             self._brightness_value = int_value
             self.async_write_ha_state()
+            
+            # Fire event so auto-brightness switch can update
+            self.hass.bus.async_fire(
+                f"{DOMAIN}_brightness_changed",
+                {"device_id": self._device_id}
+            )
