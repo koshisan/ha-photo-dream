@@ -8,6 +8,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
 from .helpers import get_device_info
 
 from .const import (
@@ -18,7 +19,7 @@ from .const import (
     CONF_DATE,
     CONF_WEATHER,
 )
-from . import push_config_to_device
+from . import push_config_to_device, get_device_data, send_command_to_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ async def async_setup_entry(
         entities.append(PhotoDreamClockSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamDateSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamWeatherSwitch(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamAutoBrightnessSwitch(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -181,3 +183,63 @@ class PhotoDreamWeatherSwitch(PhotoDreamBaseSwitch):
         self._update_device_config(CONF_WEATHER, False)
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
+
+
+class PhotoDreamAutoBrightnessSwitch(SwitchEntity):
+    """Switch to toggle auto-brightness on a PhotoDream device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Auto Brightness"
+    _attr_icon = "mdi:brightness-auto"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the switch."""
+        self.hass = hass
+        self._entry = entry
+        self._device_id = device_id
+        self._device_config = device_config
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_auto_brightness"
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
+        self._is_on: bool = False  # Default until first poll
+        self._supported: bool = True
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if auto-brightness is enabled."""
+        return self._is_on
+
+    @property
+    def available(self) -> bool:
+        """Return true if auto-brightness is supported by device."""
+        return self._supported
+
+    async def async_update(self) -> None:
+        """Fetch latest auto-brightness state from device."""
+        data = await get_device_data(self.hass, self._device_id, "auto-brightness")
+        if data:
+            self._is_on = data.get("auto_brightness", False)
+            self._supported = data.get("supported", True)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on auto-brightness."""
+        success = await send_command_to_device(
+            self.hass, self._device_id, "auto-brightness", {"enabled": True}
+        )
+        if success:
+            self._is_on = True
+            self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off auto-brightness."""
+        success = await send_command_to_device(
+            self.hass, self._device_id, "auto-brightness", {"enabled": False}
+        )
+        if success:
+            self._is_on = False
+            self.async_write_ha_state()

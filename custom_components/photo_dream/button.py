@@ -47,6 +47,8 @@ async def async_setup_hub_buttons(
     entities = []
     for device_id, device_config in devices.items():
         entities.append(PhotoDreamNextImageButton(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamSlideshowStartButton(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamSlideshowExitButton(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -77,12 +79,10 @@ async def async_setup_immich_buttons(
     async_add_entities(entities)
 
 
-class PhotoDreamNextImageButton(ButtonEntity):
-    """Button to advance to next image on a PhotoDream device."""
+class PhotoDreamBaseButton(ButtonEntity):
+    """Base class for PhotoDream button entities."""
 
     _attr_has_entity_name = True
-    _attr_name = "Next Image"
-    _attr_icon = "mdi:skip-next"
 
     def __init__(
         self,
@@ -96,13 +96,76 @@ class PhotoDreamNextImageButton(ButtonEntity):
         self._entry = entry
         self._device_id = device_id
         self._device_config = device_config
-        self._attr_unique_id = f"{entry.entry_id}_{device_id}_next_image"
         self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
+
+
+class PhotoDreamNextImageButton(PhotoDreamBaseButton):
+    """Button to advance to next image on a PhotoDream device."""
+
+    _attr_name = "Next Image"
+    _attr_icon = "mdi:skip-next"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the button."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_next_image"
 
     async def async_press(self) -> None:
         """Handle the button press."""
         _LOGGER.info("Next image requested for device %s", self._device_id)
         await send_command_to_device(self.hass, self._device_id, "next")
+
+
+class PhotoDreamSlideshowStartButton(PhotoDreamBaseButton):
+    """Button to start slideshow on a PhotoDream device."""
+
+    _attr_name = "Slideshow Start"
+    _attr_icon = "mdi:play"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the button."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_slideshow_start"
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        _LOGGER.info("Slideshow start requested for device %s", self._device_id)
+        await send_command_to_device(self.hass, self._device_id, "slideshow/start")
+
+
+class PhotoDreamSlideshowExitButton(PhotoDreamBaseButton):
+    """Button to exit slideshow on a PhotoDream device."""
+
+    _attr_name = "Slideshow Exit"
+    _attr_icon = "mdi:stop"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the button."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_slideshow_exit"
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        _LOGGER.info("Slideshow exit requested for device %s", self._device_id)
+        await send_command_to_device(self.hass, self._device_id, "slideshow/exit")
 
 
 # ============================================================================

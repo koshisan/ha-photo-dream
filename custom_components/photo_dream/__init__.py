@@ -647,6 +647,43 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_SET_PROFILE, handle_set_profile)
 
 
+async def get_device_data(
+    hass: HomeAssistant, device_id: str, endpoint: str
+) -> dict | None:
+    """Get data from a PhotoDream device endpoint."""
+    hub_data = hass.data.get(DOMAIN, {}).get("hub")
+    if not hub_data:
+        _LOGGER.error("No hub configured")
+        return None
+    
+    devices = hub_data.get("entry").data.get(CONF_DEVICES, {})
+    if device_id not in devices:
+        _LOGGER.error("Device %s not found", device_id)
+        return None
+    
+    device = devices[device_id]
+    ip = device.get(CONF_DEVICE_IP)
+    port = device.get(CONF_DEVICE_PORT, DEFAULT_PORT)
+    
+    if not ip:
+        _LOGGER.error("No IP configured for device %s", device_id)
+        return None
+    
+    url = f"http://{ip}:{port}/{endpoint}"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    _LOGGER.warning("Device %s returned %d for %s", device_id, resp.status, endpoint)
+                    return None
+    except Exception as e:
+        _LOGGER.error("Failed to get data from device %s: %s", device_id, e)
+        return None
+
+
 async def send_command_to_device(
     hass: HomeAssistant, device_id: str, command: str, data: dict | None = None
 ) -> bool:

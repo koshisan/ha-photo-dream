@@ -21,7 +21,7 @@ from .const import (
     DEFAULT_PAN_SPEED,
     DEFAULT_CLOCK_FONT_SIZE,
 )
-from . import push_config_to_device
+from . import push_config_to_device, get_device_data, send_command_to_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ async def async_setup_entry(
         entities.append(PhotoDreamIntervalNumber(hass, entry, device_id, device_config))
         entities.append(PhotoDreamPanSpeedNumber(hass, entry, device_id, device_config))
         entities.append(PhotoDreamClockFontSizeNumber(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamBrightnessNumber(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -180,3 +181,57 @@ class PhotoDreamClockFontSizeNumber(PhotoDreamBaseNumber):
         self._update_device_config(CONF_CLOCK_FONT_SIZE, int(value))
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
+
+
+class PhotoDreamBrightnessNumber(NumberEntity):
+    """Number entity for screen brightness on a PhotoDream device.
+    
+    Range: -100 to +100
+    - 0 to 100: System brightness
+    - -1 to -100: Overlay dimming (darker than hardware minimum)
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Brightness"
+    _attr_icon = "mdi:brightness-6"
+    _attr_native_min_value = -100
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the number entity."""
+        self.hass = hass
+        self._entry = entry
+        self._device_id = device_id
+        self._device_config = device_config
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_brightness"
+        self._attr_device_info = get_device_info(hass, entry, device_id, device_config)
+        self._brightness_value: int = 50  # Default until first poll
+
+    @property
+    def native_value(self) -> float:
+        """Return the current brightness."""
+        return self._brightness_value
+
+    async def async_update(self) -> None:
+        """Fetch latest brightness from device."""
+        data = await get_device_data(self.hass, self._device_id, "brightness")
+        if data and "brightness" in data:
+            self._brightness_value = data["brightness"]
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the brightness."""
+        int_value = int(value)
+        success = await send_command_to_device(
+            self.hass, self._device_id, "brightness", {"value": int_value}
+        )
+        if success:
+            self._brightness_value = int_value
+            self.async_write_ha_state()
