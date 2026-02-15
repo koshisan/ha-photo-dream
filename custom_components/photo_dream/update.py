@@ -160,11 +160,18 @@ class PhotoDreamUpdateEntity(UpdateEntity):
                     # Get release URL
                     self._release_url = data.get("html_url")
                     
-                    # Find APK asset
+                    # Find release APK asset (prefer -release.apk over -debug.apk)
                     for asset in data.get("assets", []):
-                        if asset.get("name", "").endswith(".apk"):
+                        name = asset.get("name", "")
+                        if name.endswith("-release.apk"):
                             self._apk_url = asset.get("browser_download_url")
                             break
+                    # Fallback: any .apk if no -release.apk found
+                    if not self._apk_url:
+                        for asset in data.get("assets", []):
+                            if asset.get("name", "").endswith(".apk"):
+                                self._apk_url = asset.get("browser_download_url")
+                                break
                     
                     _LOGGER.debug(
                         "Latest release: %s, APK: %s",
