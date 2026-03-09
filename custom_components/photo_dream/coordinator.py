@@ -92,7 +92,7 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 
                 self._previous_counts[profile_name] = count
                 
-            except Exception as e:
+            except (Exception, asyncio.CancelledError) as e:
                 _LOGGER.error("Failed to get image count for profile '%s': %s", profile_name, e)
                 result[profile_name] = {
                     "image_count": None,
@@ -136,7 +136,7 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         url,
                         headers=headers,
                         json=payload,
-                        timeout=30,
+                        timeout=aiohttp.ClientTimeout(total=30),
                     ) as resp:
                         if resp.status == 200:
                             data = await resp.json()
@@ -209,7 +209,7 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             if key in search_filter and search_filter[key] is not None:
                                 payload[key] = search_filter[key]
                     
-                    async with session.post(url, headers=headers, json=payload, timeout=60) as resp:
+                    async with session.post(url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=60)) as resp:
                         if resp.status != 200:
                             text = await resp.text()
                             _LOGGER.error("Immich search API error %d: %s", resp.status, text)
@@ -302,7 +302,15 @@ async def async_get_coordinator(
     
     if entry.entry_id not in coordinators:
         coordinator = ImmichCoordinator(hass, entry)
-        await coordinator.async_config_entry_first_refresh()
+        try:
+            await coordinator.async_config_entry_first_refresh()
+        except (asyncio.CancelledError, TimeoutError) as err:
+            _LOGGER.warning(
+                "First data refresh timed out (%s), will retry on next interval",
+                type(err).__name__,
+            )
+            # Don't re-raise — let setup succeed with empty data.
+            # The coordinator will retry on the next update_interval.
         coordinators[entry.entry_id] = coordinator
     
     return coordinators[entry.entry_id]

@@ -305,6 +305,7 @@ async def async_setup_immich_sensors(
         entities.append(ProfileLastRefreshSensor(coordinator, entry, profile_name, profile_id))
         entities.append(ProfileSearchFilterSensor(coordinator, entry, profile_name, profile_id, profile_config))
         entities.append(ProfileExcludePathsSensor(coordinator, entry, profile_name, profile_id, profile_config))
+        entities.append(ProfileMediaTypeSensor(coordinator, entry, profile_name, profile_id, profile_config))
     
     async_add_entities(entities)
 
@@ -472,3 +473,48 @@ class ProfileExcludePathsSensor(CoordinatorEntity, SensorEntity):
             "paths": exclude_paths,
             "patterns": [p.replace("*", "") for p in exclude_paths],
         }
+
+
+class ProfileMediaTypeSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing the media type filter for a profile."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Media Type"
+    _attr_icon = "mdi:file-image"
+
+    def __init__(
+        self,
+        coordinator,
+        entry: ConfigEntry,
+        profile_name: str,
+        profile_id: str,
+        profile_config: dict,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._profile_name = profile_name
+        self._profile_id = profile_id
+        self._profile_config = profile_config
+        self._attr_unique_id = f"profile_{profile_id}_media_type"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"profile_{profile_id}")},
+        }
+
+    @property
+    def native_value(self) -> str:
+        """Return the media type."""
+        from .const import DEFAULT_MEDIA_TYPE, MEDIA_TYPES, CONF_MEDIA_TYPE
+        media_type = self._profile_config.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE)
+        return MEDIA_TYPES.get(media_type, media_type)
+
+    @property
+    def icon(self) -> str:
+        """Return icon based on media type."""
+        from .const import CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE
+        media_type = self._profile_config.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE)
+        if media_type == "video":
+            return "mdi:video"
+        elif media_type == "both":
+            return "mdi:file-image"
+        return "mdi:image"
