@@ -31,6 +31,7 @@ from .const import (
     CONF_PROFILE_ID,
     CONF_SEARCH_FILTER,
     CONF_EXCLUDE_PATHS,
+    CONF_MEDIA_TYPE,
     CONF_CLOCK,
     CONF_CLOCK_POSITION,
     CONF_CLOCK_FORMAT,
@@ -48,8 +49,10 @@ from .const import (
     DEFAULT_DATE_FORMAT,
     DEFAULT_INTERVAL,
     DEFAULT_PAN_SPEED,
+    DEFAULT_MEDIA_TYPE,
     CLOCK_POSITIONS,
     DATE_FORMATS,
+    MEDIA_TYPES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -225,15 +228,16 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
             exclude_paths = [
                 p.strip() for p in user_input.get(CONF_EXCLUDE_PATHS, "").split(",") if p.strip()
             ]
-            
+
             self._data[CONF_PROFILES][profile_name] = {
                 CONF_SEARCH_FILTER: search_filter,
                 CONF_EXCLUDE_PATHS: exclude_paths,
+                CONF_MEDIA_TYPE: user_input.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE),
             }
-            
+
             if user_input.get("add_another"):
                 return await self.async_step_profile()
-            
+
             # Done - create entry
             immich_name = self._data.get(CONF_IMMICH_NAME, "Immich")
             return self.async_create_entry(
@@ -247,6 +251,7 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_PROFILE_NAME, default="default"): str,
                 vol.Optional(CONF_SEARCH_FILTER, default=""): str,
                 vol.Optional(CONF_EXCLUDE_PATHS, default="/Private/*"): str,
+                vol.Optional(CONF_MEDIA_TYPE, default=DEFAULT_MEDIA_TYPE): vol.In(MEDIA_TYPES),
                 vol.Optional("add_another", default=False): bool,
             }),
             description_placeholders={
@@ -639,12 +644,13 @@ class ImmichOptionsFlow(OptionsFlow):
             search_input = user_input.get(CONF_SEARCH_FILTER, "")
             search_filter = parse_immich_search_input(search_input) if search_input else {}
             exclude_paths = [p.strip() for p in user_input.get(CONF_EXCLUDE_PATHS, "").split(",") if p.strip()]
-            
+
             self._profiles[profile_name] = {
                 CONF_SEARCH_FILTER: search_filter,
                 CONF_EXCLUDE_PATHS: exclude_paths,
+                CONF_MEDIA_TYPE: user_input.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE),
             }
-            
+
             return await self._save_and_finish()
 
         return self.async_show_form(
@@ -653,6 +659,7 @@ class ImmichOptionsFlow(OptionsFlow):
                 vol.Required(CONF_PROFILE_NAME): str,
                 vol.Optional(CONF_SEARCH_FILTER, default=""): str,
                 vol.Optional(CONF_EXCLUDE_PATHS, default=""): str,
+                vol.Optional(CONF_MEDIA_TYPE, default=DEFAULT_MEDIA_TYPE): vol.In(MEDIA_TYPES),
             }),
         )
 
@@ -685,22 +692,25 @@ class ImmichOptionsFlow(OptionsFlow):
             search_input = user_input.get(CONF_SEARCH_FILTER, "")
             search_filter = parse_immich_search_input(search_input) if search_input else {}
             exclude_paths = [p.strip() for p in user_input.get(CONF_EXCLUDE_PATHS, "").split(",") if p.strip()]
-            
+
             self._profiles[profile_name] = {
                 CONF_SEARCH_FILTER: search_filter,
                 CONF_EXCLUDE_PATHS: exclude_paths,
+                CONF_MEDIA_TYPE: user_input.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE),
             }
-            
+
             return await self._save_and_finish()
 
         existing_filter = profile.get(CONF_SEARCH_FILTER, {})
         filter_str = json.dumps(existing_filter) if existing_filter else ""
-        
+        current_media_type = profile.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE)
+
         return self.async_show_form(
             step_id="edit_profile",
             data_schema=vol.Schema({
                 vol.Optional(CONF_SEARCH_FILTER, default=filter_str): str,
                 vol.Optional(CONF_EXCLUDE_PATHS, default=", ".join(profile.get(CONF_EXCLUDE_PATHS, []))): str,
+                vol.Optional(CONF_MEDIA_TYPE, default=current_media_type): vol.In(MEDIA_TYPES),
             }),
             description_placeholders={"profile_name": profile_name},
         )
