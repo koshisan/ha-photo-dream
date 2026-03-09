@@ -40,6 +40,15 @@ CONF_PROFILE_NAME: Final = "name"
 CONF_PROFILE_ID: Final = "profile_id"
 CONF_SEARCH_FILTER: Final = "search_filter"
 CONF_EXCLUDE_PATHS: Final = "exclude_paths"
+CONF_MEDIA_TYPE: Final = "media_type"
+
+# Media type options
+DEFAULT_MEDIA_TYPE: Final = "image"
+MEDIA_TYPES: Final = {
+    "image": "Photos only",
+    "video": "Videos only",
+    "both": "Photos & Videos",
+}
 
 # Defaults
 DEFAULT_PORT: Final = 8080

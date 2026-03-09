@@ -30,6 +30,8 @@ from .const import (
     CONF_PROFILE_ID,
     CONF_SEARCH_FILTER,
     CONF_EXCLUDE_PATHS,
+    CONF_MEDIA_TYPE,
+    DEFAULT_MEDIA_TYPE,
     CONF_WEATHER_ENTITY,
     DEFAULT_PORT,
     SERVICE_NEXT_IMAGE,
@@ -599,6 +601,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             "name": profile_name,
             "search_filter": parse_immich_url(profile_config.get(CONF_SEARCH_FILTER, {})),
             "exclude_paths": profile_config.get(CONF_EXCLUDE_PATHS, []),
+            "media_type": profile_config.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE),
         },
         "webhook_url": status_webhook_url,
     }

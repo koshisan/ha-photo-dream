@@ -22,6 +22,8 @@ from .const import (
     CONF_PROFILES,
     CONF_SEARCH_FILTER,
     CONF_EXCLUDE_PATHS,
+    CONF_MEDIA_TYPE,
+    DEFAULT_MEDIA_TYPE,
     CONF_DEVICES,
 )
 from . import parse_immich_url
@@ -68,9 +70,10 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raw_filter = profile_config.get(CONF_SEARCH_FILTER, {})
             search_filter = parse_immich_url(raw_filter)
             exclude_paths = profile_config.get(CONF_EXCLUDE_PATHS, [])
-            
+            media_type = profile_config.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE)
+
             try:
-                count = await self._get_image_count(immich_url, api_key, search_filter, exclude_paths)
+                count = await self._get_image_count(immich_url, api_key, search_filter, exclude_paths, media_type)
                 profile_id = f"{self.entry.entry_id}_{profile_name}".replace(" ", "_").lower()
                 
                 result[profile_name] = {
@@ -107,20 +110,26 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return result
 
     async def _get_image_count(
-        self, immich_url: str, api_key: str, search_filter: dict, exclude_paths: list[str]
+        self, immich_url: str, api_key: str, search_filter: dict, exclude_paths: list[str],
+        media_type: str = DEFAULT_MEDIA_TYPE,
     ) -> int:
         """Query Immich API to get image count for a search filter.
-        
+
         If exclude_paths is empty, uses fast /api/search/statistics endpoint.
         If exclude_paths is set, fetches all assets and filters client-side.
         """
         headers = {"x-api-key": api_key, "Content-Type": "application/json"}
-        
+
         # Fast path: no excludes, use statistics endpoint
         if not exclude_paths:
             url = f"{immich_url}/api/search/statistics"
             payload = dict(search_filter) if search_filter else {}
-            
+            if media_type == "image":
+                payload["type"] = "IMAGE"
+            elif media_type == "video":
+                payload["type"] = "VIDEO"
+            # 'both' -> omit type field
+
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
@@ -140,46 +149,58 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             raise UpdateFailed(f"Immich API returned {resp.status}")
             except aiohttp.ClientError as e:
                 raise UpdateFailed(f"Cannot connect to Immich: {e}")
-        
+
         # Slow path: has excludes, need to fetch and filter
-        return await self._get_filtered_count(immich_url, api_key, search_filter, exclude_paths)
+        return await self._get_filtered_count(immich_url, api_key, search_filter, exclude_paths, media_type)
     
     async def _get_filtered_count(
-        self, immich_url: str, api_key: str, search_filter: dict, exclude_paths: list[str]
+        self, immich_url: str, api_key: str, search_filter: dict, exclude_paths: list[str],
+        media_type: str = DEFAULT_MEDIA_TYPE,
     ) -> int:
         """Fetch all assets and count after applying exclude_paths filter."""
         headers = {"x-api-key": api_key, "Content-Type": "application/json"}
-        
+
         # Convert exclude patterns (remove trailing *)
         exclude_patterns = [p.rstrip("*").rstrip("/") for p in exclude_paths]
-        
+
+        # Map media_type to Immich API type value (None means omit field)
+        immich_type: str | None
+        if media_type == "image":
+            immich_type = "IMAGE"
+        elif media_type == "video":
+            immich_type = "VIDEO"
+        else:
+            immich_type = None  # 'both' -> no filter
+
         total_count = 0
         excluded_count = 0
         page = 1
         page_size = 1000  # Larger pages for counting
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 while True:
                     # Use metadata search for filtered counting (smart search has CLIP limits)
                     # If search_filter has a "query" key, use smart search; otherwise metadata
                     has_query = search_filter and search_filter.get("query")
-                    
+
                     if has_query:
                         url = f"{immich_url}/api/search/smart"
                         payload = {
                             "query": search_filter["query"],
                             "page": page,
                             "size": page_size,
-                            "type": search_filter.get("type", "IMAGE"),
                         }
+                        if immich_type is not None:
+                            payload["type"] = immich_type
                     else:
                         url = f"{immich_url}/api/search/metadata"
                         payload = {
                             "page": page,
                             "size": page_size,
-                            "type": search_filter.get("type", "IMAGE") if search_filter else "IMAGE",
                         }
+                        if immich_type is not None:
+                            payload["type"] = immich_type
                     
                     # Add optional filters
                     if search_filter:
