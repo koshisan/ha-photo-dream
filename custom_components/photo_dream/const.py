@@ -1,4 +1,5 @@
 """Constants for PhotoDream integration."""
+from datetime import timedelta
 from typing import Final
 
 DOMAIN: Final = "photo_dream"
@@ -41,6 +42,41 @@ CONF_PROFILE_ID: Final = "profile_id"
 CONF_SEARCH_FILTER: Final = "search_filter"
 CONF_EXCLUDE_PATHS: Final = "exclude_paths"
 CONF_MEDIA_TYPE: Final = "media_type"
+
+# Calendar config keys (per device)
+CONF_CALENDAR: Final = "calendar"  # overlay enabled (bool)
+CONF_CALENDAR_POSITION: Final = "calendar_position"
+CONF_CALENDAR_MAX_EVENTS: Final = "calendar_max_events"
+CONF_CALENDAR_SHOW_LOCATION: Final = "calendar_show_location"
+CONF_CALENDAR_FONT_SIZE: Final = "calendar_font_size"
+CONF_CALENDAR_ENTITIES: Final = "calendar_entities"  # list[str] of calendar.* entity_ids
+CONF_CALENDAR_COLORS: Final = "calendar_colors"  # dict[entity_id -> "#RRGGBB"]
+CONF_CALENDAR_LOOKAHEAD_DAYS: Final = "calendar_lookahead_days"
+
+# Calendar defaults
+DEFAULT_CALENDAR: Final = False
+DEFAULT_CALENDAR_POSITION: Final = 3  # bottom-left (same scheme as clock)
+DEFAULT_CALENDAR_MAX_EVENTS: Final = 5
+DEFAULT_CALENDAR_SHOW_LOCATION: Final = False
+DEFAULT_CALENDAR_FONT_SIZE: Final = 16
+DEFAULT_CALENDAR_LOOKAHEAD_DAYS: Final = 7
+
+# Default color palette used when a calendar has no explicit color mapping
+CALENDAR_COLOR_PALETTE: Final = [
+    "#03a9f4",  # light blue
+    "#8bc34a",  # light green
+    "#ff9800",  # orange
+    "#e91e63",  # pink
+    "#9c27b0",  # purple
+    "#00bcd4",  # cyan
+    "#cddc39",  # lime
+    "#f44336",  # red
+]
+
+# How often the integration pushes merged calendar events to devices
+CALENDAR_PUSH_INTERVAL: Final = timedelta(minutes=15)
+# Coalesce window for calendar state-change driven pushes (seconds)
+CALENDAR_DEBOUNCE_SECONDS: Final = 5
 
 # Media type options
 DEFAULT_MEDIA_TYPE: Final = "image"
@@ -88,6 +124,23 @@ DATE_FORMATS: Final = {
 SERVICE_NEXT_IMAGE: Final = "next_image"
 SERVICE_REFRESH_CONFIG: Final = "refresh_config"
 SERVICE_SET_PROFILE: Final = "set_profile"
+SERVICE_NOTIFY: Final = "notify"
+
+# Notify service attributes
+ATTR_MESSAGE: Final = "message"
+ATTR_TITLE: Final = "title"
+ATTR_COLOR: Final = "color"
+ATTR_IMAGE_URL: Final = "image_url"
+ATTR_DURATION: Final = "duration"
+ATTR_SOUND: Final = "sound"
+ATTR_CALLBACK_URL: Final = "callback_url"
+ATTR_CALLBACK_METHOD: Final = "callback_method"
+
+# Notify defaults (match the app-side defaults from the handover doc)
+DEFAULT_NOTIFY_COLOR: Final = "#2196F3"
+DEFAULT_NOTIFY_DURATION: Final = 8
+DEFAULT_NOTIFY_SOUND: Final = False
+DEFAULT_NOTIFY_CALLBACK_METHOD: Final = "POST"
 
 # Attributes
 ATTR_DEVICE_ID: Final = "device_id"

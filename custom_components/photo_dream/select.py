@@ -23,10 +23,12 @@ from .const import (
     CONF_DATE_FORMAT,
     CONF_DISPLAY_MODE,
     CONF_WEATHER_ENTITY,
+    CONF_CALENDAR_POSITION,
     DEFAULT_CLOCK_POSITION,
     DEFAULT_CLOCK_FORMAT,
     DEFAULT_DATE_FORMAT,
     DEFAULT_DISPLAY_MODE,
+    DEFAULT_CALENDAR_POSITION,
     CLOCK_POSITIONS,
     DATE_FORMATS,
     ATTR_PROFILE,
@@ -68,6 +70,7 @@ async def async_setup_entry(
         entities.append(PhotoDreamDateFormatSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamDisplayModeSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamWeatherEntitySelect(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamCalendarPositionSelect(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -326,6 +329,40 @@ class PhotoDreamDisplayModeSelect(PhotoDreamBaseSelect):
     async def async_select_option(self, option: str) -> None:
         """Change the display mode."""
         self._update_device_config(CONF_DISPLAY_MODE, option)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamCalendarPositionSelect(PhotoDreamBaseSelect):
+    """Select entity for calendar overlay position on a PhotoDream device."""
+
+    _attr_name = "Calendar Position"
+    _attr_icon = "mdi:calendar-month"
+    _attr_options = list(CLOCK_POSITIONS.values())
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the select entity."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_calendar_position"
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current calendar position."""
+        pos = self._get_device_config().get(CONF_CALENDAR_POSITION, DEFAULT_CALENDAR_POSITION)
+        return CLOCK_POSITIONS.get(pos, CLOCK_POSITIONS[DEFAULT_CALENDAR_POSITION])
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the calendar position."""
+        pos_map = {v: k for k, v in CLOCK_POSITIONS.items()}
+        pos = pos_map.get(option, DEFAULT_CALENDAR_POSITION)
+
+        self._update_device_config(CONF_CALENDAR_POSITION, pos)
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
 
