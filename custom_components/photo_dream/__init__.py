@@ -58,6 +58,7 @@ from .const import (
     ATTR_PROFILE_ID,
     ATTR_MESSAGE,
     ATTR_TITLE,
+    ATTR_ICON,
     ATTR_COLOR,
     ATTR_IMAGE_URL,
     ATTR_DURATION,
@@ -660,6 +661,31 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
                 "temperature": weather_state.attributes.get("temperature"),
                 "temperature_unit": temp_unit,
             }
+
+            # Daily high/low. The 'forecast' attribute was removed from weather
+            # entities, so fetch it via the weather.get_forecasts service.
+            try:
+                forecast_resp = await hass.services.async_call(
+                    "weather",
+                    "get_forecasts",
+                    {"entity_id": weather_entity_id, "type": "daily"},
+                    blocking=True,
+                    return_response=True,
+                )
+                forecasts = (
+                    (forecast_resp or {}).get(weather_entity_id, {}).get("forecast", [])
+                )
+                if forecasts:
+                    today = forecasts[0]
+                    if today.get("temperature") is not None:
+                        weather_config["temp_high"] = today["temperature"]
+                    if today.get("templow") is not None:
+                        weather_config["temp_low"] = today["templow"]
+            except Exception as e:  # noqa: BLE001 - forecast is optional metadata
+                _LOGGER.debug(
+                    "Could not get daily forecast for %s: %s", weather_entity_id, e
+                )
+
             _LOGGER.debug("Weather for %s: %s", device_id, weather_config)
         else:
             _LOGGER.warning("Weather entity %s not found", weather_entity_id)
@@ -802,6 +828,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         payload: dict[str, Any] = {ATTR_MESSAGE: call.data[ATTR_MESSAGE]}
         for key in (
             ATTR_TITLE,
+            ATTR_ICON,
             ATTR_COLOR,
             ATTR_IMAGE_URL,
             ATTR_DURATION,

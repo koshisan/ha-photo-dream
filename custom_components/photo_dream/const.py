@@ -129,6 +129,7 @@ SERVICE_NOTIFY: Final = "notify"
 # Notify service attributes
 ATTR_MESSAGE: Final = "message"
 ATTR_TITLE: Final = "title"
+ATTR_ICON: Final = "icon"
 ATTR_COLOR: Final = "color"
 ATTR_IMAGE_URL: Final = "image_url"
 ATTR_DURATION: Final = "duration"
