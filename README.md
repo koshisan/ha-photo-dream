@@ -84,8 +84,10 @@ Two ways to show a popup over the slideshow:
 
 - **`notify.photodream_<device>`** entity — for simple `message` + `title` popups
   (uses the app's default color/duration). Works anywhere a notify target is accepted.
-- **`photo_dream.notify`** service — for the full feature set (image, sound, duration,
-  tap callback). `shown` is `false` if no slideshow is currently running.
+- **`photo_dream.notify`** service — for the full feature set (icon, image, sound,
+  duration, tap callback). `shown` is `false` if no slideshow is currently running.
+  The `icon` field takes an MDI name (e.g. `mdi:doorbell`); unknown/empty falls back
+  to `mdi:bell`.
 
 ```yaml
 automation:
@@ -100,6 +102,7 @@ automation:
           device_id: kitchen
           title: "Front Door"
           message: "Someone is at the door"
+          icon: "mdi:doorbell"
           color: "#f44336"
           image_url: "https://ha.local/api/camera_proxy/camera.door?token=XYZ"
           duration: 10

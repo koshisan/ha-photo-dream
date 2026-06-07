@@ -66,6 +66,13 @@ notify:
       example: "Haustür"
       selector:
         text:
+    icon:
+      name: Icon
+      description: MDI icon name shown on the notification (e.g. mdi:doorbell). Unknown/empty falls back to mdi:bell.
+      required: false
+      example: "mdi:doorbell"
+      selector:
+        icon:
     color:
       name: Color
       description: Hex accent color of the left bar (e.g. #f44336).
