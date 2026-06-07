@@ -13,6 +13,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFl
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import selector
 
 from .const import (
     DOMAIN,
@@ -40,6 +41,13 @@ from .const import (
     CONF_DATE_FORMAT,
     CONF_INTERVAL,
     CONF_PAN_SPEED,
+    CONF_CALENDAR,
+    CONF_CALENDAR_POSITION,
+    CONF_CALENDAR_MAX_EVENTS,
+    CONF_CALENDAR_SHOW_LOCATION,
+    CONF_CALENDAR_FONT_SIZE,
+    CONF_CALENDAR_ENTITIES,
+    CONF_CALENDAR_COLORS,
     DEFAULT_PORT,
     DEFAULT_CLOCK,
     DEFAULT_CLOCK_POSITION,
@@ -50,6 +58,12 @@ from .const import (
     DEFAULT_INTERVAL,
     DEFAULT_PAN_SPEED,
     DEFAULT_MEDIA_TYPE,
+    DEFAULT_CALENDAR,
+    DEFAULT_CALENDAR_POSITION,
+    DEFAULT_CALENDAR_MAX_EVENTS,
+    DEFAULT_CALENDAR_SHOW_LOCATION,
+    DEFAULT_CALENDAR_FONT_SIZE,
+    CALENDAR_COLOR_PALETTE,
     CLOCK_POSITIONS,
     DATE_FORMATS,
     MEDIA_TYPES,
@@ -131,6 +145,83 @@ def parse_immich_search_input(input_str: str) -> dict:
 def generate_profile_id(immich_entry_id: str, profile_name: str) -> str:
     """Generate a unique profile ID."""
     return f"{immich_entry_id}_{profile_name}".replace(" ", "_").lower()
+
+
+CALENDAR_ENTITY_SELECTOR = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain="calendar", multiple=True)
+)
+
+
+def _hex_to_rgb(value: str) -> list[int]:
+    """Convert '#RRGGBB' (or '#AARRGGBB') to [r, g, b]; fall back to white."""
+    try:
+        h = value.lstrip("#")
+        if len(h) == 8:  # '#AARRGGBB' -> drop alpha
+            h = h[2:]
+        return [int(h[i:i + 2], 16) for i in (0, 2, 4)]
+    except (ValueError, AttributeError):
+        return [255, 255, 255]
+
+
+def _rgb_to_hex(rgb) -> str:
+    """Convert [r, g, b] to '#RRGGBB'."""
+    try:
+        r, g, b = (int(c) for c in rgb[:3])
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except (ValueError, TypeError):
+        return "#ffffff"
+
+
+def _auto_assign_colors(entities: list[str], existing: dict | None) -> dict[str, str]:
+    """Ensure every entity has a colour; keep existing, fill gaps from palette."""
+    existing = existing or {}
+    return {
+        entity_id: existing.get(entity_id)
+        or CALENDAR_COLOR_PALETTE[idx % len(CALENDAR_COLOR_PALETTE)]
+        for idx, entity_id in enumerate(entities)
+    }
+
+
+def _calendar_schema_dict(device: dict) -> dict:
+    """Return voluptuous schema entries for the per-device calendar fields."""
+    return {
+        vol.Optional(CONF_CALENDAR, default=device.get(CONF_CALENDAR, DEFAULT_CALENDAR)): bool,
+        vol.Optional(
+            CONF_CALENDAR_ENTITIES, default=device.get(CONF_CALENDAR_ENTITIES, [])
+        ): CALENDAR_ENTITY_SELECTOR,
+        vol.Optional(
+            CONF_CALENDAR_POSITION,
+            default=device.get(CONF_CALENDAR_POSITION, DEFAULT_CALENDAR_POSITION),
+        ): vol.In(CLOCK_POSITIONS),
+        vol.Optional(
+            CONF_CALENDAR_MAX_EVENTS,
+            default=device.get(CONF_CALENDAR_MAX_EVENTS, DEFAULT_CALENDAR_MAX_EVENTS),
+        ): int,
+        vol.Optional(
+            CONF_CALENDAR_SHOW_LOCATION,
+            default=device.get(CONF_CALENDAR_SHOW_LOCATION, DEFAULT_CALENDAR_SHOW_LOCATION),
+        ): bool,
+        vol.Optional(
+            CONF_CALENDAR_FONT_SIZE,
+            default=device.get(CONF_CALENDAR_FONT_SIZE, DEFAULT_CALENDAR_FONT_SIZE),
+        ): int,
+    }
+
+
+def _extract_calendar(user_input: dict, existing: dict) -> dict:
+    """Pull calendar fields from user_input, auto-assigning colours."""
+    entities = user_input.get(CONF_CALENDAR_ENTITIES, []) or []
+    return {
+        CONF_CALENDAR: user_input.get(CONF_CALENDAR, DEFAULT_CALENDAR),
+        CONF_CALENDAR_ENTITIES: entities,
+        CONF_CALENDAR_POSITION: user_input.get(CONF_CALENDAR_POSITION, DEFAULT_CALENDAR_POSITION),
+        CONF_CALENDAR_MAX_EVENTS: user_input.get(CONF_CALENDAR_MAX_EVENTS, DEFAULT_CALENDAR_MAX_EVENTS),
+        CONF_CALENDAR_SHOW_LOCATION: user_input.get(
+            CONF_CALENDAR_SHOW_LOCATION, DEFAULT_CALENDAR_SHOW_LOCATION
+        ),
+        CONF_CALENDAR_FONT_SIZE: user_input.get(CONF_CALENDAR_FONT_SIZE, DEFAULT_CALENDAR_FONT_SIZE),
+        CONF_CALENDAR_COLORS: _auto_assign_colors(entities, existing.get(CONF_CALENDAR_COLORS)),
+    }
 
 
 class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -346,6 +437,8 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_DATE_FORMAT: user_input.get(CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT),
                 CONF_INTERVAL: user_input.get(CONF_INTERVAL, DEFAULT_INTERVAL),
                 CONF_PAN_SPEED: user_input.get(CONF_PAN_SPEED, DEFAULT_PAN_SPEED),
+                # Calendar overlay (colours auto-assigned from palette; refine via Edit)
+                **_extract_calendar(user_input, {}),
             }
             
             # Update hub entry
@@ -378,6 +471,7 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_DATE_FORMAT, default=DEFAULT_DATE_FORMAT): vol.In(DATE_FORMATS),
                 vol.Optional(CONF_INTERVAL, default=DEFAULT_INTERVAL): int,
                 vol.Optional(CONF_PAN_SPEED, default=DEFAULT_PAN_SPEED): vol.Coerce(float),
+                **_calendar_schema_dict({}),
             }),
             description_placeholders={
                 "device_id": device_id,
@@ -509,7 +603,7 @@ class HubOptionsFlow(OptionsFlow):
                     all_profiles[profile_id] = f"{immich_name} / {profile_name}"
         
         if user_input is not None:
-            self._devices[device_id] = {
+            new_device = {
                 **device,
                 CONF_DEVICE_NAME: user_input.get(CONF_DEVICE_NAME, device_id),
                 CONF_PROFILE_ID: user_input.get(CONF_PROFILE_ID),
@@ -521,8 +615,14 @@ class HubOptionsFlow(OptionsFlow):
                 CONF_DATE_FORMAT: user_input.get(CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT),
                 CONF_INTERVAL: user_input.get(CONF_INTERVAL, DEFAULT_INTERVAL),
                 CONF_PAN_SPEED: user_input.get(CONF_PAN_SPEED, DEFAULT_PAN_SPEED),
+                **_extract_calendar(user_input, device),
             }
-            
+            self._devices[device_id] = new_device
+
+            # If calendar is enabled with entities, offer per-calendar colours.
+            if new_device.get(CONF_CALENDAR) and new_device.get(CONF_CALENDAR_ENTITIES):
+                return await self.async_step_calendar_colors()
+
             return await self._save_and_finish()
 
         current_profile = device.get(CONF_PROFILE_ID, device.get("profile", ""))
@@ -540,7 +640,37 @@ class HubOptionsFlow(OptionsFlow):
                 vol.Optional(CONF_DATE_FORMAT, default=device.get(CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT)): vol.In(DATE_FORMATS),
                 vol.Optional(CONF_INTERVAL, default=device.get(CONF_INTERVAL, DEFAULT_INTERVAL)): int,
                 vol.Optional(CONF_PAN_SPEED, default=device.get(CONF_PAN_SPEED, DEFAULT_PAN_SPEED)): vol.Coerce(float),
+                **_calendar_schema_dict(device),
             }),
+            description_placeholders={"device_id": device_id},
+        )
+
+    async def async_step_calendar_colors(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick an accent colour per selected calendar."""
+        device_id = self._editing_device
+        device = self._devices.get(device_id, {})
+        entities = device.get(CONF_CALENDAR_ENTITIES, []) or []
+
+        if user_input is not None:
+            colors = {
+                eid: _rgb_to_hex(user_input[eid])
+                for eid in entities
+                if eid in user_input
+            }
+            self._devices[device_id] = {**device, CONF_CALENDAR_COLORS: colors}
+            return await self._save_and_finish()
+
+        existing = device.get(CONF_CALENDAR_COLORS, {})
+        schema: dict = {}
+        for eid in entities:
+            default_hex = existing.get(eid, "#ffffff")
+            schema[vol.Required(eid, default=_hex_to_rgb(default_hex))] = selector.ColorRGBSelector()
+
+        return self.async_show_form(
+            step_id="calendar_colors",
+            data_schema=vol.Schema(schema),
             description_placeholders={"device_id": device_id},
         )
 

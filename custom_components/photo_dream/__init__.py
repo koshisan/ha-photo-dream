@@ -10,10 +10,14 @@ from urllib.parse import urlparse, parse_qs, unquote
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.components import webhook
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, format_mac
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 
 from .const import (
     DOMAIN,
@@ -33,12 +37,33 @@ from .const import (
     CONF_MEDIA_TYPE,
     DEFAULT_MEDIA_TYPE,
     CONF_WEATHER_ENTITY,
+    CONF_CALENDAR,
+    CONF_CALENDAR_POSITION,
+    CONF_CALENDAR_MAX_EVENTS,
+    CONF_CALENDAR_SHOW_LOCATION,
+    CONF_CALENDAR_FONT_SIZE,
+    DEFAULT_CALENDAR,
+    DEFAULT_CALENDAR_POSITION,
+    DEFAULT_CALENDAR_MAX_EVENTS,
+    DEFAULT_CALENDAR_SHOW_LOCATION,
+    DEFAULT_CALENDAR_FONT_SIZE,
+    CALENDAR_PUSH_INTERVAL,
+    CALENDAR_DEBOUNCE_SECONDS,
     DEFAULT_PORT,
     SERVICE_NEXT_IMAGE,
     SERVICE_REFRESH_CONFIG,
     SERVICE_SET_PROFILE,
+    SERVICE_NOTIFY,
     ATTR_DEVICE_ID,
     ATTR_PROFILE_ID,
+    ATTR_MESSAGE,
+    ATTR_TITLE,
+    ATTR_COLOR,
+    ATTR_IMAGE_URL,
+    ATTR_DURATION,
+    ATTR_SOUND,
+    ATTR_CALLBACK_URL,
+    ATTR_CALLBACK_METHOD,
     WEBHOOK_REGISTER,
     WEBHOOK_STATUS,
     WEBHOOK_KEY_EVENT,
@@ -123,6 +148,7 @@ HUB_PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.NUMBER,
     Platform.UPDATE,
+    Platform.NOTIFY,
 ]
 
 # Platforms for Immich entries (profiles)
@@ -186,11 +212,61 @@ async def async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool
     
     # Setup platforms
     await hass.config_entries.async_forward_entry_setups(entry, HUB_PLATFORMS)
-    
+
     # Register services
     await async_setup_services(hass)
-    
+
+    # Start calendar event polling/pushing
+    _async_setup_calendar_tracking(hass, entry)
+
     return True
+
+
+@callback
+def _async_setup_calendar_tracking(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Set up periodic + state-change driven calendar event pushes."""
+    hub_data = hass.data[DOMAIN]["hub"]
+
+    async def _push_all(_now=None) -> None:
+        from .calendar_push import async_push_calendar_all
+        await async_push_calendar_all(hass)
+
+    # Periodic push (covers events whose time simply passes).
+    hub_data["calendar_unsub_interval"] = async_track_time_interval(
+        hass, _push_all, CALENDAR_PUSH_INTERVAL
+    )
+
+    @callback
+    def _on_calendar_state(_event) -> None:
+        """Coalesce bursts of calendar state changes into a single push."""
+        old = hub_data.get("calendar_debounce")
+        if old:
+            old.cancel()
+        hub_data["calendar_debounce"] = hass.loop.call_later(
+            CALENDAR_DEBOUNCE_SECONDS,
+            lambda: hass.async_create_task(_push_all()),
+        )
+
+    @callback
+    def _subscribe_states() -> None:
+        """(Re)subscribe to state changes of the configured calendar entities."""
+        from .calendar_push import get_configured_calendar_entities
+        if hub_data.get("calendar_unsub_states"):
+            hub_data["calendar_unsub_states"]()
+            hub_data["calendar_unsub_states"] = None
+        entities = get_configured_calendar_entities(hass)
+        if entities:
+            hub_data["calendar_unsub_states"] = async_track_state_change_event(
+                hass, entities, _on_calendar_state
+            )
+
+    _subscribe_states()
+
+    async def _on_entry_update(hass: HomeAssistant, updated_entry: ConfigEntry) -> None:
+        # Calendar entity selection may have changed - re-subscribe.
+        _subscribe_states()
+
+    hub_data["calendar_unsub_update"] = entry.add_update_listener(_on_entry_update)
 
 
 async def async_setup_immich_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -252,7 +328,22 @@ async def async_unload_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
     webhook.async_unregister(hass, WEBHOOK_REGISTER)
     webhook.async_unregister(hass, f"{WEBHOOK_STATUS}_{entry.entry_id}")
     webhook.async_unregister(hass, WEBHOOK_KEY_EVENT)
-    
+
+    # Tear down calendar tracking (timer, state listener, update listener)
+    hub_data = hass.data.get(DOMAIN, {}).get("hub")
+    if hub_data:
+        for key in (
+            "calendar_unsub_interval",
+            "calendar_unsub_states",
+            "calendar_unsub_update",
+        ):
+            unsub = hub_data.get(key)
+            if unsub:
+                unsub()
+        debounce = hub_data.get("calendar_debounce")
+        if debounce:
+            debounce.cancel()
+
     # Unload platforms
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, HUB_PLATFORMS):
         hass.data[DOMAIN]["hub"] = None
@@ -595,6 +686,13 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             "interval_seconds": device.get("interval_seconds", 30),
             "pan_speed": device.get("pan_speed", 0.5),
             "mode": device.get("display_mode", "smart_shuffle"),
+            "calendar": {
+                "enabled": device.get(CONF_CALENDAR, DEFAULT_CALENDAR),
+                "position": device.get(CONF_CALENDAR_POSITION, DEFAULT_CALENDAR_POSITION),
+                "max_events": device.get(CONF_CALENDAR_MAX_EVENTS, DEFAULT_CALENDAR_MAX_EVENTS),
+                "show_location": device.get(CONF_CALENDAR_SHOW_LOCATION, DEFAULT_CALENDAR_SHOW_LOCATION),
+                "font_size": device.get(CONF_CALENDAR_FONT_SIZE, DEFAULT_CALENDAR_FONT_SIZE),
+            },
         },
         "profile": {
             "id": profile_id,
@@ -644,6 +742,13 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
             async with session.post(url, json=config, timeout=10) as resp:
                 if resp.status == 200:
                     _LOGGER.info("Config pushed to device %s", device_id)
+                    # If the calendar overlay is enabled, push fresh events right
+                    # away so a newly-enabled overlay shows data immediately.
+                    if device.get(CONF_CALENDAR):
+                        from .calendar_push import async_push_calendar_to_device
+                        hass.async_create_task(
+                            async_push_calendar_to_device(hass, device_id)
+                        )
                     return True
                 else:
                     _LOGGER.error("Failed to push config to %s: HTTP %s", device_id, resp.status)
@@ -689,9 +794,29 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             hass.config_entries.async_update_entry(entry, data=new_data)
             await push_config_to_device(hass, device_id)
     
+    async def handle_notify(call: ServiceCall) -> None:
+        """Handle notify service call - show a popup overlay on a device."""
+        device_id = call.data.get(ATTR_DEVICE_ID)
+        # Forward only the fields actually provided; the app applies its own
+        # defaults for anything omitted.
+        payload: dict[str, Any] = {ATTR_MESSAGE: call.data[ATTR_MESSAGE]}
+        for key in (
+            ATTR_TITLE,
+            ATTR_COLOR,
+            ATTR_IMAGE_URL,
+            ATTR_DURATION,
+            ATTR_SOUND,
+            ATTR_CALLBACK_URL,
+            ATTR_CALLBACK_METHOD,
+        ):
+            if key in call.data:
+                payload[key] = call.data[key]
+        await send_command_to_device(hass, device_id, "notify", payload)
+
     hass.services.async_register(DOMAIN, SERVICE_NEXT_IMAGE, handle_next_image)
     hass.services.async_register(DOMAIN, SERVICE_REFRESH_CONFIG, handle_refresh_config)
     hass.services.async_register(DOMAIN, SERVICE_SET_PROFILE, handle_set_profile)
+    hass.services.async_register(DOMAIN, SERVICE_NOTIFY, handle_notify)
 
 
 async def get_device_data(

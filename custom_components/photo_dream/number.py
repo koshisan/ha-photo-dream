@@ -17,9 +17,13 @@ from .const import (
     CONF_INTERVAL,
     CONF_PAN_SPEED,
     CONF_CLOCK_FONT_SIZE,
+    CONF_CALENDAR_MAX_EVENTS,
+    CONF_CALENDAR_FONT_SIZE,
     DEFAULT_INTERVAL,
     DEFAULT_PAN_SPEED,
     DEFAULT_CLOCK_FONT_SIZE,
+    DEFAULT_CALENDAR_MAX_EVENTS,
+    DEFAULT_CALENDAR_FONT_SIZE,
 )
 from . import push_config_to_device, get_device_data, send_command_to_device
 
@@ -43,6 +47,8 @@ async def async_setup_entry(
         entities.append(PhotoDreamIntervalNumber(hass, entry, device_id, device_config))
         entities.append(PhotoDreamPanSpeedNumber(hass, entry, device_id, device_config))
         entities.append(PhotoDreamClockFontSizeNumber(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamCalendarMaxEventsNumber(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamCalendarFontSizeNumber(hass, entry, device_id, device_config))
         entities.append(PhotoDreamBrightnessNumber(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
@@ -179,6 +185,77 @@ class PhotoDreamClockFontSizeNumber(PhotoDreamBaseNumber):
     async def async_set_native_value(self, value: float) -> None:
         """Set the font size."""
         self._update_device_config(CONF_CLOCK_FONT_SIZE, int(value))
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamCalendarMaxEventsNumber(PhotoDreamBaseNumber):
+    """Number entity for max calendar events shown on a PhotoDream device."""
+
+    _attr_name = "Calendar Max Events"
+    _attr_icon = "mdi:calendar-multiple"
+    _attr_native_min_value = 1
+    _attr_native_max_value = 20
+    _attr_native_step = 1
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the number entity."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_calendar_max_events"
+
+    @property
+    def native_value(self) -> float:
+        """Return the current max events."""
+        return self._get_device_config().get(
+            CONF_CALENDAR_MAX_EVENTS, DEFAULT_CALENDAR_MAX_EVENTS
+        )
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the max events."""
+        self._update_device_config(CONF_CALENDAR_MAX_EVENTS, int(value))
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamCalendarFontSizeNumber(PhotoDreamBaseNumber):
+    """Number entity for calendar font size on a PhotoDream device."""
+
+    _attr_name = "Calendar Font Size"
+    _attr_icon = "mdi:format-size"
+    _attr_native_min_value = 10
+    _attr_native_max_value = 40
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = "sp"
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the number entity."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_calendar_font_size"
+
+    @property
+    def native_value(self) -> float:
+        """Return the current calendar font size."""
+        return self._get_device_config().get(
+            CONF_CALENDAR_FONT_SIZE, DEFAULT_CALENDAR_FONT_SIZE
+        )
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the calendar font size."""
+        self._update_device_config(CONF_CALENDAR_FONT_SIZE, int(value))
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
 

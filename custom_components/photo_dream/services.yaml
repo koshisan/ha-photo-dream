@@ -40,3 +40,79 @@ set_profile:
       example: "christmas"
       selector:
         text:
+
+notify:
+  name: Notify
+  description: Show a notification popup overlay on a PhotoDream device's slideshow.
+  fields:
+    device_id:
+      name: Device ID
+      description: The ID of the PhotoDream device.
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+    message:
+      name: Message
+      description: Main notification text.
+      required: true
+      example: "Es klingelt an der Haustür"
+      selector:
+        text:
+    title:
+      name: Title
+      description: Bold title shown above the message.
+      required: false
+      example: "Haustür"
+      selector:
+        text:
+    color:
+      name: Color
+      description: Hex accent color of the left bar (e.g. #f44336).
+      required: false
+      example: "#f44336"
+      selector:
+        text:
+    image_url:
+      name: Image URL
+      description: Image shown on the right. Must be reachable without authentication (e.g. camera_proxy with token in URL).
+      required: false
+      example: "https://ha.local/api/camera_proxy/camera.tuer?token=..."
+      selector:
+        text:
+    duration:
+      name: Duration
+      description: Seconds until auto-dismiss. 0 or less keeps it until tapped.
+      required: false
+      default: 8
+      example: 10
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: s
+          mode: box
+    sound:
+      name: Sound
+      description: Play the device's default notification sound when shown.
+      required: false
+      default: false
+      selector:
+        boolean:
+    callback_url:
+      name: Callback URL
+      description: Called (fire-and-forget) when the card is tapped, then the card closes.
+      required: false
+      example: "https://ha.local/api/webhook/tuerklingel_quittiert"
+      selector:
+        text:
+    callback_method:
+      name: Callback Method
+      description: HTTP method for the callback.
+      required: false
+      default: POST
+      selector:
+        select:
+          options:
+            - "POST"
+            - "GET"

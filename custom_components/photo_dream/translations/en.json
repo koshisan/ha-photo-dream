@@ -28,7 +28,13 @@
           "clock": "Show Clock",
           "clock_position": "Clock Position",
           "clock_format": "Clock Format",
-          "interval_seconds": "Slide Interval (seconds)"
+          "interval_seconds": "Slide Interval (seconds)",
+          "calendar": "Show Calendar",
+          "calendar_entities": "Calendars to show",
+          "calendar_position": "Calendar Position",
+          "calendar_max_events": "Max Events",
+          "calendar_show_location": "Show Event Location",
+          "calendar_font_size": "Calendar Font Size"
         }
       }
     },
@@ -109,8 +115,18 @@
           "clock": "Show Clock",
           "clock_position": "Clock Position",
           "clock_format": "Clock Format",
-          "interval_seconds": "Slide Interval (seconds)"
+          "interval_seconds": "Slide Interval (seconds)",
+          "calendar": "Show Calendar",
+          "calendar_entities": "Calendars to show",
+          "calendar_position": "Calendar Position",
+          "calendar_max_events": "Max Events",
+          "calendar_show_location": "Show Event Location",
+          "calendar_font_size": "Calendar Font Size"
         }
+      },
+      "calendar_colors": {
+        "title": "Calendar Colors",
+        "description": "Pick an accent color for each calendar shown on {device_id}."
       },
       "select_device_delete": {
         "title": "Select Device to Delete",

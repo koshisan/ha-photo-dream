@@ -18,6 +18,10 @@ from .const import (
     CONF_CLOCK,
     CONF_DATE,
     CONF_WEATHER,
+    CONF_CALENDAR,
+    CONF_CALENDAR_SHOW_LOCATION,
+    DEFAULT_CALENDAR,
+    DEFAULT_CALENDAR_SHOW_LOCATION,
 )
 from . import push_config_to_device, get_device_data, send_command_to_device
 
@@ -41,6 +45,8 @@ async def async_setup_entry(
         entities.append(PhotoDreamClockSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamDateSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamWeatherSwitch(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamCalendarSwitch(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamCalendarShowLocationSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamAutoBrightnessSwitch(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
@@ -181,6 +187,79 @@ class PhotoDreamWeatherSwitch(PhotoDreamBaseSwitch):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the weather."""
         self._update_device_config(CONF_WEATHER, False)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamCalendarSwitch(PhotoDreamBaseSwitch):
+    """Switch to toggle calendar overlay on a PhotoDream device."""
+
+    _attr_name = "Calendar"
+    _attr_icon = "mdi:calendar-month"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_calendar"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if calendar overlay is enabled."""
+        return self._get_device_config().get(CONF_CALENDAR, DEFAULT_CALENDAR)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the calendar overlay and push fresh events."""
+        self._update_device_config(CONF_CALENDAR, True)
+        await push_config_to_device(self.hass, self._device_id)
+        # push_config_to_device already triggers a calendar push when enabled.
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the calendar overlay."""
+        self._update_device_config(CONF_CALENDAR, False)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamCalendarShowLocationSwitch(PhotoDreamBaseSwitch):
+    """Switch to toggle showing the location per calendar event."""
+
+    _attr_name = "Calendar Show Location"
+    _attr_icon = "mdi:map-marker-outline"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_calendar_show_location"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if event locations are shown."""
+        return self._get_device_config().get(
+            CONF_CALENDAR_SHOW_LOCATION, DEFAULT_CALENDAR_SHOW_LOCATION
+        )
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Show event locations."""
+        self._update_device_config(CONF_CALENDAR_SHOW_LOCATION, True)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Hide event locations."""
+        self._update_device_config(CONF_CALENDAR_SHOW_LOCATION, False)
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
 
