@@ -114,11 +114,13 @@ class PhotoDreamBaseSelect(SelectEntity):
     def _update_device_config(self, key: str, value) -> None:
         """Update device config in entry data."""
         new_data = dict(self._entry.data)
-        if CONF_DEVICES not in new_data:
-            new_data[CONF_DEVICES] = {}
-        if self._device_id not in new_data[CONF_DEVICES]:
-            new_data[CONF_DEVICES][self._device_id] = dict(self._device_config)
-        new_data[CONF_DEVICES][self._device_id][key] = value
+        # Deep-copy the devices map so async_update_entry detects a real change
+        # and fires update listeners (re-subscriptions). Mutating the shared
+        # dict in place makes HA see "no change" and skip the listeners.
+        devices = {k: dict(v) for k, v in new_data.get(CONF_DEVICES, {}).items()}
+        devices.setdefault(self._device_id, dict(self._device_config))
+        devices[self._device_id][key] = value
+        new_data[CONF_DEVICES] = devices
         self.hass.config_entries.async_update_entry(self._entry, data=new_data)
 
     async def async_added_to_hass(self) -> None:

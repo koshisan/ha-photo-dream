@@ -173,27 +173,48 @@ async def async_push_media_to_device(hass: HomeAssistant, device_id: str) -> boo
     if not device or device.get(CONF_MEDIA_MODE, DEFAULT_MEDIA_MODE) == "off":
         return False
 
-    payload = async_build_media_state(hass, device_id, device)
+    try:
+        payload = async_build_media_state(hass, device_id, device)
+    except Exception:  # noqa: BLE001 - never let one bad build kill the loop
+        _LOGGER.exception("Failed to build media state for %s", device_id)
+        return False
+
     if payload is None:
         return False
 
     from . import send_command_to_device
 
-    return await send_command_to_device(hass, device_id, "media", payload)
+    ok = await send_command_to_device(hass, device_id, "media", payload)
+    hub = hass.data.get(DOMAIN, {}).get("hub")
+    if ok and hub is not None:
+        # Remember the last state we successfully delivered so the periodic
+        # tick can detect (and re-send) transitions even if the live event
+        # listener missed them.
+        hub.setdefault("media_last", {})[device_id] = payload["state"]
+        _LOGGER.debug("Pushed media state '%s' to %s", payload["state"], device_id)
+    elif not ok:
+        _LOGGER.debug("Media push to %s did not return OK", device_id)
+    return ok
 
 
-async def async_push_media_all(hass: HomeAssistant, only_playing: bool = False) -> None:
-    """Push now-playing state to media-enabled devices.
+async def async_push_media_tick(hass: HomeAssistant) -> None:
+    """Periodic media push (the reliable backbone, independent of events).
 
-    With only_playing=True, skip devices whose player isn't currently playing
-    (used by the periodic position-refresh timer to limit traffic).
+    Pushes whenever a player is playing (for position) OR whenever its state
+    changed since the last delivered push (play/pause/idle/off transitions).
+    This guarantees every transition reaches the device within one tick, even
+    if the state-change listener never fired.
     """
+    hub = hass.data.get(DOMAIN, {}).get("hub")
+    if hub is None:
+        return
+    last = hub.setdefault("media_last", {})
     for device_id, device in _get_hub_devices(hass).items():
         if device.get(CONF_MEDIA_MODE, DEFAULT_MEDIA_MODE) == "off":
+            last.pop(device_id, None)
             continue
-        if only_playing:
-            eid = device.get(CONF_MEDIA_PLAYER_ENTITY)
-            st = hass.states.get(eid) if eid else None
-            if st is None or st.state not in ("playing", "buffering"):
-                continue
-        await async_push_media_to_device(hass, device_id)
+        eid = device.get(CONF_MEDIA_PLAYER_ENTITY)
+        st = hass.states.get(eid) if eid else None
+        cur = _STATE_MAP.get(st.state, "off") if st else "off"
+        if cur == "playing" or last.get(device_id) != cur:
+            await async_push_media_to_device(hass, device_id)
