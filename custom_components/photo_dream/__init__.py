@@ -322,15 +322,31 @@ def _async_setup_media_tracking(hass: HomeAssistant, entry: ConfigEntry) -> None
 
     @callback
     def _on_media_state(event) -> None:
-        """Debounced push for devices using the changed media_player."""
+        """Push for devices using the changed media_player.
+
+        A real state transition (play/pause/stop) is pushed immediately so it
+        can never be starved by attribute churn. Attribute-only updates (e.g.
+        media_position) are debounced to avoid a flood.
+        """
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+        new_s = new_state.state if new_state else None
+        old_s = old_state.state if old_state else None
+        state_changed = new_s != old_s
+
         for did in _media_devices_for_entity(hass, event.data.get("entity_id")):
-            old = hub_data["media_debounce"].get(did)
-            if old:
-                old.cancel()
-            hub_data["media_debounce"][did] = hass.loop.call_later(
-                MEDIA_DEBOUNCE_SECONDS,
-                lambda d=did: hass.async_create_task(_push_one(d)),
-            )
+            pending = hub_data["media_debounce"].pop(did, None)
+            if pending:
+                pending.cancel()
+            if state_changed:
+                # play/pause/idle/off transition - push now, reliably.
+                hass.async_create_task(_push_one(did))
+            else:
+                # attribute-only change - coalesce.
+                hub_data["media_debounce"][did] = hass.loop.call_later(
+                    MEDIA_DEBOUNCE_SECONDS,
+                    lambda d=did: hass.async_create_task(_push_one(d)),
+                )
 
     @callback
     def _subscribe_states() -> None:
