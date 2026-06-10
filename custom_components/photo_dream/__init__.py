@@ -307,13 +307,14 @@ def _async_setup_media_tracking(hass: HomeAssistant, entry: ConfigEntry) -> None
     hub_data = hass.data[DOMAIN]["hub"]
     hub_data["media_debounce"] = {}
 
-    async def _push_playing(_now=None) -> None:
-        from .media_push import async_push_media_all
-        await async_push_media_all(hass, only_playing=True)
+    async def _media_tick(_now=None) -> None:
+        from .media_push import async_push_media_tick
+        await async_push_media_tick(hass)
 
-    # Periodic position refresh while playing.
+    # Periodic backbone: refreshes position while playing AND delivers any
+    # state transition the live listener may have missed.
     hub_data["media_unsub_interval"] = async_track_time_interval(
-        hass, _push_playing, MEDIA_PUSH_INTERVAL
+        hass, _media_tick, MEDIA_PUSH_INTERVAL
     )
 
     async def _push_one(device_id: str) -> None:
