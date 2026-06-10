@@ -10,6 +10,7 @@ Home Assistant custom integration for [PhotoDream](https://github.com/koshisan/P
 - ⏰ Configure display settings (clock, interval, Ken Burns effect)
 - 📅 Calendar overlay – merge multiple `calendar.*` entities onto the slideshow
 - 🔔 Notification overlay – HA-styled popups with image, sound and tap callback
+- 🎵 Media player overlay – now-playing card/focus mode with transport controls
 - 🔄 Real-time status updates via webhook
 - 🎛️ Control tablets via services and entities
 
@@ -51,6 +52,8 @@ For each configured tablet, the following entities are created:
 | `select.photodream_<device>_calendar_position` | Select | Calendar overlay position |
 | `number.photodream_<device>_calendar_max_events` | Number | Max events shown |
 | `number.photodream_<device>_calendar_font_size` | Number | Calendar font size |
+| `select.photodream_<device>_media_mode` | Select | Media overlay mode (off/compact/focus) |
+| `select.photodream_<device>_media_player` | Select | Media player source entity |
 | `notify.photodream_<device>` | Notify | Simple message/title popup |
 
 ## Services
@@ -115,6 +118,32 @@ The tap **callback** is fire-and-forget. Point `callback_url` at an HA webhook a
 trigger an automation on it (e.g. acknowledge the doorbell, turn on a light).
 The `image_url` must be reachable **without** authentication (e.g. `camera_proxy`
 with a token in the URL).
+
+## Media Player
+
+Shows a now-playing card over the slideshow, driven by a `media_player.*` entity —
+configured **per device**.
+
+**Setup:** Settings → Devices & Services → PhotoDream → *Configure* → edit a device:
+
+1. Set **Media Player Mode**: `off`, `compact` (small card top-left), or `focus`
+   (full cover, slideshow dimmed, artist background).
+2. Pick the **Media Player** entity for that tablet.
+
+The integration pushes the now-playing state to the device automatically — on every
+state/track change and every 5 s while playing (so the progress bar advances). The
+player only appears while something is `playing`/`paused`. `source_icon` is derived
+automatically from the player's source/app (Spotify, YouTube, radio, cast …).
+
+**Transport controls** are zero-config: the integration registers three webhooks per
+device and includes their URLs in the pushed state. Tapping play/pause, next or prev
+on the tablet calls `media_player.media_play_pause` / `media_next_track` /
+`media_previous_track` on that device's player.
+
+**Focus-mode HD art (optional):** register a free project key at
+[fanart.tv](https://fanart.tv) and enter it under *Configure → Hub settings
+(fanart.tv key)* — it applies to all devices. Without a key the app falls back to
+TheAudioDB (free, no key).
 
 ## Architecture
 

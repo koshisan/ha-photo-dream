@@ -78,6 +78,24 @@ CALENDAR_PUSH_INTERVAL: Final = timedelta(minutes=15)
 # Coalesce window for calendar state-change driven pushes (seconds)
 CALENDAR_DEBOUNCE_SECONDS: Final = 5
 
+# Media player config keys
+CONF_MEDIA_MODE: Final = "media_mode"  # "off" | "compact" | "focus"
+CONF_MEDIA_PLAYER_ENTITY: Final = "media_player_entity"
+CONF_FANART_API_KEY: Final = "fanart_api_key"  # hub-level, optional (focus HD art)
+
+# Media player modes
+DEFAULT_MEDIA_MODE: Final = "off"
+MEDIA_MODES: Final = {
+    "off": "Off",
+    "compact": "Compact card",
+    "focus": "Focus (full cover)",
+}
+
+# How often the now-playing state is pushed while a player is playing (position)
+MEDIA_PUSH_INTERVAL: Final = timedelta(seconds=5)
+# Coalesce window for media state-change driven pushes (seconds)
+MEDIA_DEBOUNCE_SECONDS: Final = 1
+
 # Media type options
 DEFAULT_MEDIA_TYPE: Final = "image"
 MEDIA_TYPES: Final = {
@@ -161,6 +179,9 @@ ATTR_APP_VERSION: Final = "app_version"
 WEBHOOK_REGISTER: Final = "photo_dream_register"
 WEBHOOK_STATUS: Final = "photo_dream_status"
 WEBHOOK_KEY_EVENT: Final = "photo_dream_key_event"
+# Per-device media transport webhooks: f"{WEBHOOK_MEDIA}_{device_id}_{action}"
+WEBHOOK_MEDIA: Final = "photo_dream_mp"
+MEDIA_CONTROL_ACTIONS: Final = ("playpause", "next", "prev")
 
 # Weather config
 CONF_WEATHER_ENTITY: Final = "weather_entity"

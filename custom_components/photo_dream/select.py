@@ -24,11 +24,15 @@ from .const import (
     CONF_DISPLAY_MODE,
     CONF_WEATHER_ENTITY,
     CONF_CALENDAR_POSITION,
+    CONF_MEDIA_MODE,
+    CONF_MEDIA_PLAYER_ENTITY,
     DEFAULT_CLOCK_POSITION,
     DEFAULT_CLOCK_FORMAT,
     DEFAULT_DATE_FORMAT,
     DEFAULT_DISPLAY_MODE,
     DEFAULT_CALENDAR_POSITION,
+    DEFAULT_MEDIA_MODE,
+    MEDIA_MODES,
     CLOCK_POSITIONS,
     DATE_FORMATS,
     ATTR_PROFILE,
@@ -71,6 +75,8 @@ async def async_setup_entry(
         entities.append(PhotoDreamDisplayModeSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamWeatherEntitySelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamCalendarPositionSelect(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamMediaModeSelect(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamMediaPlayerSelect(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -435,5 +441,103 @@ class PhotoDreamWeatherEntitySelect(PhotoDreamBaseSelect):
         _LOGGER.info("Setting weather entity to %s for device %s", entity_id, self._device_id)
         
         self._update_device_config(CONF_WEATHER_ENTITY, entity_id)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamMediaModeSelect(PhotoDreamBaseSelect):
+    """Select entity for the media player overlay mode on a PhotoDream device."""
+
+    _attr_name = "Media Mode"
+    _attr_icon = "mdi:music-box-multiple"
+    _attr_options = list(MEDIA_MODES.values())
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the select entity."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_media_mode"
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current media mode."""
+        mode = self._get_device_config().get(CONF_MEDIA_MODE, DEFAULT_MEDIA_MODE)
+        return MEDIA_MODES.get(mode, MEDIA_MODES[DEFAULT_MEDIA_MODE])
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the media mode."""
+        mode_map = {v: k for k, v in MEDIA_MODES.items()}
+        mode = mode_map.get(option, DEFAULT_MEDIA_MODE)
+
+        self._update_device_config(CONF_MEDIA_MODE, mode)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamMediaPlayerSelect(PhotoDreamBaseSelect):
+    """Select entity for choosing the media_player source on a PhotoDream device."""
+
+    _attr_name = "Media Player"
+    _attr_icon = "mdi:speaker"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the select entity."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_media_player"
+        self._player_map = {"None": None}
+        self._attr_options = ["None"]
+
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass, update options."""
+        await super().async_added_to_hass()
+        self._update_options()
+
+    def _update_options(self) -> None:
+        """Update available media_player entity options."""
+        self._player_map = {"None": None}
+        for state in self.hass.states.async_all("media_player"):
+            friendly_name = state.attributes.get("friendly_name", state.entity_id)
+            display = f"{friendly_name} ({state.entity_id})"
+            self._player_map[display] = state.entity_id
+        self._attr_options = list(self._player_map.keys())
+
+    @property
+    def options(self) -> list[str]:
+        """Return options, refreshing if needed."""
+        if len(self._attr_options) <= 1:
+            self._update_options()
+        return self._attr_options
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current media_player entity."""
+        self._update_options()
+        entity_id = self._get_device_config().get(CONF_MEDIA_PLAYER_ENTITY)
+        if not entity_id:
+            return "None"
+        for display, eid in self._player_map.items():
+            if eid == entity_id:
+                return display
+        return entity_id
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the media_player entity."""
+        self._update_options()
+        entity_id = self._player_map.get(option)
+
+        _LOGGER.info("Setting media player to %s for device %s", entity_id, self._device_id)
+
+        self._update_device_config(CONF_MEDIA_PLAYER_ENTITY, entity_id)
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
