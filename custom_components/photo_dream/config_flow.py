@@ -48,6 +48,11 @@ from .const import (
     CONF_CALENDAR_FONT_SIZE,
     CONF_CALENDAR_ENTITIES,
     CONF_CALENDAR_COLORS,
+    CONF_MEDIA_MODE,
+    CONF_MEDIA_PLAYER_ENTITY,
+    CONF_FANART_API_KEY,
+    DEFAULT_MEDIA_MODE,
+    MEDIA_MODES,
     DEFAULT_PORT,
     DEFAULT_CLOCK,
     DEFAULT_CLOCK_POSITION,
@@ -221,6 +226,35 @@ def _extract_calendar(user_input: dict, existing: dict) -> dict:
         ),
         CONF_CALENDAR_FONT_SIZE: user_input.get(CONF_CALENDAR_FONT_SIZE, DEFAULT_CALENDAR_FONT_SIZE),
         CONF_CALENDAR_COLORS: _auto_assign_colors(entities, existing.get(CONF_CALENDAR_COLORS)),
+    }
+
+
+MEDIA_PLAYER_ENTITY_SELECTOR = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain="media_player")
+)
+
+
+def _media_schema_dict(device: dict) -> dict:
+    """Return voluptuous schema entries for the per-device media fields."""
+    existing_player = device.get(CONF_MEDIA_PLAYER_ENTITY)
+    player_key = (
+        vol.Optional(CONF_MEDIA_PLAYER_ENTITY, default=existing_player)
+        if existing_player
+        else vol.Optional(CONF_MEDIA_PLAYER_ENTITY)
+    )
+    return {
+        vol.Optional(
+            CONF_MEDIA_MODE, default=device.get(CONF_MEDIA_MODE, DEFAULT_MEDIA_MODE)
+        ): vol.In(MEDIA_MODES),
+        player_key: MEDIA_PLAYER_ENTITY_SELECTOR,
+    }
+
+
+def _extract_media(user_input: dict) -> dict:
+    """Pull media fields from user_input."""
+    return {
+        CONF_MEDIA_MODE: user_input.get(CONF_MEDIA_MODE, DEFAULT_MEDIA_MODE),
+        CONF_MEDIA_PLAYER_ENTITY: user_input.get(CONF_MEDIA_PLAYER_ENTITY) or "",
     }
 
 
@@ -439,6 +473,8 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_PAN_SPEED: user_input.get(CONF_PAN_SPEED, DEFAULT_PAN_SPEED),
                 # Calendar overlay (colours auto-assigned from palette; refine via Edit)
                 **_extract_calendar(user_input, {}),
+                # Media player overlay
+                **_extract_media(user_input),
             }
             
             # Update hub entry
@@ -472,6 +508,7 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_INTERVAL, default=DEFAULT_INTERVAL): int,
                 vol.Optional(CONF_PAN_SPEED, default=DEFAULT_PAN_SPEED): vol.Coerce(float),
                 **_calendar_schema_dict({}),
+                **_media_schema_dict({}),
             }),
             description_placeholders={
                 "device_id": device_id,
@@ -538,32 +575,56 @@ class HubOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage Hub options - device management."""
+        """Manage Hub options - device management + hub settings."""
         device_list = ", ".join(self._devices.keys()) if self._devices else "None (waiting for discovery)"
-        
-        if not self._devices:
-            return self.async_show_form(
-                step_id="init",
-                data_schema=vol.Schema({}),
-                description_placeholders={"devices": device_list},
-            )
-        
+
         if user_input is not None:
             action = user_input.get("action")
             if action == "edit":
                 return await self.async_step_select_device_edit()
             elif action == "delete":
                 return await self.async_step_select_device_delete()
-        
+            elif action == "hub_settings":
+                return await self.async_step_hub_settings()
+
+        actions: dict[str, str] = {}
+        if self._devices:
+            actions["edit"] = "Edit device"
+            actions["delete"] = "Delete device"
+        actions["hub_settings"] = "Hub settings (fanart.tv key)"
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required("action"): vol.In({
-                    "edit": "Edit device",
-                    "delete": "Delete device",
-                }),
+                vol.Required("action"): vol.In(actions),
             }),
             description_placeholders={"devices": device_list},
+        )
+
+    async def async_step_hub_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit hub-wide settings (fanart.tv API key)."""
+        if user_input is not None:
+            new_data = dict(self._entry.data)
+            new_data[CONF_FANART_API_KEY] = user_input.get(CONF_FANART_API_KEY, "").strip()
+            self.hass.config_entries.async_update_entry(self._entry, data=new_data)
+
+            # Re-push so the new key reaches all devices immediately.
+            from . import push_config_to_device
+            for device_id in self._entry.data.get(CONF_DEVICES, {}):
+                await push_config_to_device(self.hass, device_id)
+
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="hub_settings",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_FANART_API_KEY,
+                    default=self._entry.data.get(CONF_FANART_API_KEY, ""),
+                ): str,
+            }),
         )
 
     async def async_step_select_device_edit(
@@ -616,6 +677,7 @@ class HubOptionsFlow(OptionsFlow):
                 CONF_INTERVAL: user_input.get(CONF_INTERVAL, DEFAULT_INTERVAL),
                 CONF_PAN_SPEED: user_input.get(CONF_PAN_SPEED, DEFAULT_PAN_SPEED),
                 **_extract_calendar(user_input, device),
+                **_extract_media(user_input),
             }
             self._devices[device_id] = new_device
 
@@ -641,6 +703,7 @@ class HubOptionsFlow(OptionsFlow):
                 vol.Optional(CONF_INTERVAL, default=device.get(CONF_INTERVAL, DEFAULT_INTERVAL)): int,
                 vol.Optional(CONF_PAN_SPEED, default=device.get(CONF_PAN_SPEED, DEFAULT_PAN_SPEED)): vol.Coerce(float),
                 **_calendar_schema_dict(device),
+                **_media_schema_dict(device),
             }),
             description_placeholders={"device_id": device_id},
         )

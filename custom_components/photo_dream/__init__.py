@@ -49,6 +49,14 @@ from .const import (
     DEFAULT_CALENDAR_FONT_SIZE,
     CALENDAR_PUSH_INTERVAL,
     CALENDAR_DEBOUNCE_SECONDS,
+    CONF_MEDIA_MODE,
+    CONF_MEDIA_PLAYER_ENTITY,
+    CONF_FANART_API_KEY,
+    DEFAULT_MEDIA_MODE,
+    MEDIA_PUSH_INTERVAL,
+    MEDIA_DEBOUNCE_SECONDS,
+    WEBHOOK_MEDIA,
+    MEDIA_CONTROL_ACTIONS,
     DEFAULT_PORT,
     SERVICE_NEXT_IMAGE,
     SERVICE_REFRESH_CONFIG,
@@ -220,6 +228,10 @@ async def async_setup_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool
     # Start calendar event polling/pushing
     _async_setup_calendar_tracking(hass, entry)
 
+    # Start media-player polling/pushing + register transport webhooks
+    _async_setup_media_tracking(hass, entry)
+    _async_register_media_webhooks(hass, entry)
+
     return True
 
 
@@ -268,6 +280,131 @@ def _async_setup_calendar_tracking(hass: HomeAssistant, entry: ConfigEntry) -> N
         _subscribe_states()
 
     hub_data["calendar_unsub_update"] = entry.add_update_listener(_on_entry_update)
+
+
+def _media_devices_for_entity(hass: HomeAssistant, entity_id: str | None) -> list[str]:
+    """Device ids whose media player is entity_id (and media is enabled)."""
+    if not entity_id:
+        return []
+    hub_data = hass.data.get(DOMAIN, {}).get("hub")
+    entry_id = hub_data.get("entry_id") if hub_data else None
+    entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+    if not entry:
+        return []
+    result = []
+    for did, device in entry.data.get(CONF_DEVICES, {}).items():
+        if (
+            device.get(CONF_MEDIA_MODE, DEFAULT_MEDIA_MODE) != "off"
+            and device.get(CONF_MEDIA_PLAYER_ENTITY) == entity_id
+        ):
+            result.append(did)
+    return result
+
+
+@callback
+def _async_setup_media_tracking(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Set up periodic + state-change driven now-playing pushes."""
+    hub_data = hass.data[DOMAIN]["hub"]
+    hub_data["media_debounce"] = {}
+
+    async def _push_playing(_now=None) -> None:
+        from .media_push import async_push_media_all
+        await async_push_media_all(hass, only_playing=True)
+
+    # Periodic position refresh while playing.
+    hub_data["media_unsub_interval"] = async_track_time_interval(
+        hass, _push_playing, MEDIA_PUSH_INTERVAL
+    )
+
+    async def _push_one(device_id: str) -> None:
+        from .media_push import async_push_media_to_device
+        await async_push_media_to_device(hass, device_id)
+
+    @callback
+    def _on_media_state(event) -> None:
+        """Debounced push for devices using the changed media_player."""
+        for did in _media_devices_for_entity(hass, event.data.get("entity_id")):
+            old = hub_data["media_debounce"].get(did)
+            if old:
+                old.cancel()
+            hub_data["media_debounce"][did] = hass.loop.call_later(
+                MEDIA_DEBOUNCE_SECONDS,
+                lambda d=did: hass.async_create_task(_push_one(d)),
+            )
+
+    @callback
+    def _subscribe_states() -> None:
+        from .media_push import get_media_player_entities
+        if hub_data.get("media_unsub_states"):
+            hub_data["media_unsub_states"]()
+            hub_data["media_unsub_states"] = None
+        entities = get_media_player_entities(hass)
+        if entities:
+            hub_data["media_unsub_states"] = async_track_state_change_event(
+                hass, entities, _on_media_state
+            )
+
+    _subscribe_states()
+
+    async def _on_entry_update(hass: HomeAssistant, updated_entry: ConfigEntry) -> None:
+        _subscribe_states()
+
+    hub_data["media_unsub_update"] = entry.add_update_listener(_on_entry_update)
+
+
+@callback
+def _async_register_media_webhooks(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Register the 3 transport webhooks per device."""
+    hub_data = hass.data[DOMAIN]["hub"]
+    hub_data["media_webhooks"] = {}
+    for device_id in entry.data.get(CONF_DEVICES, {}):
+        for action in MEDIA_CONTROL_ACTIONS:
+            wid = f"{WEBHOOK_MEDIA}_{device_id}_{action}"
+            hub_data["media_webhooks"][wid] = (device_id, action)
+            webhook.async_register(
+                hass,
+                DOMAIN,
+                f"PhotoDream Media {device_id} {action}",
+                wid,
+                handle_media_control_webhook,
+            )
+
+
+_MEDIA_SERVICE = {
+    "playpause": "media_play_pause",
+    "next": "media_next_track",
+    "prev": "media_previous_track",
+}
+
+
+async def handle_media_control_webhook(
+    hass: HomeAssistant, webhook_id: str, request: aiohttp.web.Request
+) -> aiohttp.web.Response:
+    """Handle a media transport button tap from a device."""
+    try:
+        hub_data = hass.data.get(DOMAIN, {}).get("hub")
+        mapping = (hub_data or {}).get("media_webhooks", {}).get(webhook_id)
+        if not mapping:
+            return aiohttp.web.json_response({"status": "unknown"}, status=404)
+        device_id, action = mapping
+
+        entry_id = hub_data.get("entry_id")
+        entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+        device = (entry.data.get(CONF_DEVICES, {}) if entry else {}).get(device_id, {})
+        entity_id = device.get(CONF_MEDIA_PLAYER_ENTITY)
+        if not entity_id:
+            return aiohttp.web.json_response({"status": "no_entity"}, status=400)
+
+        await hass.services.async_call(
+            "media_player",
+            _MEDIA_SERVICE[action],
+            {"entity_id": entity_id},
+            blocking=False,
+        )
+        return aiohttp.web.json_response({"status": "ok"})
+    except Exception as e:
+        _LOGGER.error("Error handling media control webhook: %s", e)
+        return aiohttp.web.Response(status=500, text=str(e))
 
 
 async def async_setup_immich_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -330,13 +467,16 @@ async def async_unload_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
     webhook.async_unregister(hass, f"{WEBHOOK_STATUS}_{entry.entry_id}")
     webhook.async_unregister(hass, WEBHOOK_KEY_EVENT)
 
-    # Tear down calendar tracking (timer, state listener, update listener)
+    # Tear down calendar + media tracking (timers, listeners, webhooks)
     hub_data = hass.data.get(DOMAIN, {}).get("hub")
     if hub_data:
         for key in (
             "calendar_unsub_interval",
             "calendar_unsub_states",
             "calendar_unsub_update",
+            "media_unsub_interval",
+            "media_unsub_states",
+            "media_unsub_update",
         ):
             unsub = hub_data.get(key)
             if unsub:
@@ -344,6 +484,10 @@ async def async_unload_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
         debounce = hub_data.get("calendar_debounce")
         if debounce:
             debounce.cancel()
+        for handle in (hub_data.get("media_debounce") or {}).values():
+            handle.cancel()
+        for wid in (hub_data.get("media_webhooks") or {}):
+            webhook.async_unregister(hass, wid)
 
     # Unload platforms
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, HUB_PLATFORMS):
@@ -719,6 +863,10 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
                 "show_location": device.get(CONF_CALENDAR_SHOW_LOCATION, DEFAULT_CALENDAR_SHOW_LOCATION),
                 "font_size": device.get(CONF_CALENDAR_FONT_SIZE, DEFAULT_CALENDAR_FONT_SIZE),
             },
+            "media": {
+                "mode": device.get(CONF_MEDIA_MODE, DEFAULT_MEDIA_MODE),
+                "fanart_api_key": entry.data.get(CONF_FANART_API_KEY, ""),
+            },
         },
         "profile": {
             "id": profile_id,
@@ -774,6 +922,12 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
                         from .calendar_push import async_push_calendar_to_device
                         hass.async_create_task(
                             async_push_calendar_to_device(hass, device_id)
+                        )
+                    # Same for the media player overlay.
+                    if device.get(CONF_MEDIA_MODE, DEFAULT_MEDIA_MODE) != "off":
+                        from .media_push import async_push_media_to_device
+                        hass.async_create_task(
+                            async_push_media_to_device(hass, device_id)
                         )
                     return True
                 else:

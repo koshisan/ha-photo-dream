@@ -34,7 +34,9 @@
           "calendar_position": "Calendar Position",
           "calendar_max_events": "Max Events",
           "calendar_show_location": "Show Event Location",
-          "calendar_font_size": "Calendar Font Size"
+          "calendar_font_size": "Calendar Font Size",
+          "media_mode": "Media Player Mode",
+          "media_player_entity": "Media Player"
         }
       }
     },
@@ -121,7 +123,16 @@
           "calendar_position": "Calendar Position",
           "calendar_max_events": "Max Events",
           "calendar_show_location": "Show Event Location",
-          "calendar_font_size": "Calendar Font Size"
+          "calendar_font_size": "Calendar Font Size",
+          "media_mode": "Media Player Mode",
+          "media_player_entity": "Media Player"
+        }
+      },
+      "hub_settings": {
+        "title": "Hub Settings",
+        "description": "Optional fanart.tv project API key for HD artist backgrounds in media focus mode. Leave empty to use the free TheAudioDB fallback.",
+        "data": {
+          "fanart_api_key": "fanart.tv API Key"
         }
       },
       "calendar_colors": {
