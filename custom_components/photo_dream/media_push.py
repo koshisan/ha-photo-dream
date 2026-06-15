@@ -198,12 +198,11 @@ async def async_push_media_to_device(hass: HomeAssistant, device_id: str) -> boo
 
 
 async def async_push_media_tick(hass: HomeAssistant) -> None:
-    """Periodic media push (the reliable backbone, independent of events).
+    """Safety-net tick: deliver a state transition the listener may have missed.
 
-    Pushes whenever a player is playing (for position) OR whenever its state
-    changed since the last delivered push (play/pause/idle/off transitions).
-    This guarantees every transition reaches the device within one tick, even
-    if the state-change listener never fired.
+    Does NOT stream position - the app interpolates that locally. Pushes only
+    when the mapped state changed since the last delivered push, so during
+    steady playback it stays silent (no periodic spam).
     """
     hub = hass.data.get(DOMAIN, {}).get("hub")
     if hub is None:
@@ -216,5 +215,5 @@ async def async_push_media_tick(hass: HomeAssistant) -> None:
         eid = device.get(CONF_MEDIA_PLAYER_ENTITY)
         st = hass.states.get(eid) if eid else None
         cur = _STATE_MAP.get(st.state, "off") if st else "off"
-        if cur == "playing" or last.get(device_id) != cur:
+        if last.get(device_id) != cur:
             await async_push_media_to_device(hass, device_id)

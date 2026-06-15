@@ -54,7 +54,6 @@ from .const import (
     CONF_FANART_API_KEY,
     DEFAULT_MEDIA_MODE,
     MEDIA_PUSH_INTERVAL,
-    MEDIA_DEBOUNCE_SECONDS,
     WEBHOOK_MEDIA,
     MEDIA_CONTROL_ACTIONS,
     DEFAULT_PORT,
@@ -301,11 +300,28 @@ def _media_devices_for_entity(hass: HomeAssistant, entity_id: str | None) -> lis
     return result
 
 
+def _media_signature(state) -> tuple:
+    """Fields whose change warrants a re-base push (track/duration/state)."""
+    a = state.attributes
+    return (state.state, a.get("media_title"), a.get("media_artist"), a.get("media_duration"))
+
+
+def _is_seek(old_state, new_state) -> bool:
+    """True if media_position jumped vs. the expected linear progression."""
+    op = old_state.attributes.get("media_position")
+    np = new_state.attributes.get("media_position")
+    ou = old_state.attributes.get("media_position_updated_at")
+    nu = new_state.attributes.get("media_position_updated_at")
+    if op is None or np is None or ou is None or nu is None:
+        return False
+    expected = op + (nu - ou).total_seconds()
+    return abs(np - expected) > 3
+
+
 @callback
 def _async_setup_media_tracking(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Set up periodic + state-change driven now-playing pushes."""
+    """Set up event-driven now-playing pushes (+ a slow safety-net tick)."""
     hub_data = hass.data[DOMAIN]["hub"]
-    hub_data["media_debounce"] = {}
 
     async def _media_tick(_now=None) -> None:
         from .media_push import async_push_media_tick
@@ -323,31 +339,26 @@ def _async_setup_media_tracking(hass: HomeAssistant, entry: ConfigEntry) -> None
 
     @callback
     def _on_media_state(event) -> None:
-        """Push for devices using the changed media_player.
+        """Push only on meaningful changes; the app interpolates position itself.
 
-        A real state transition (play/pause/stop) is pushed immediately so it
-        can never be starved by attribute churn. Attribute-only updates (e.g.
-        media_position) are debounced to avoid a flood.
+        The app re-bases its progress bar on real events (play/pause/idle/off,
+        track or duration change, seek) and runs a local ticker in between, so
+        there's no need to stream position - we push only when something the
+        app must react to actually changed.
         """
         new_state = event.data.get("new_state")
         old_state = event.data.get("old_state")
-        new_s = new_state.state if new_state else None
-        old_s = old_state.state if old_state else None
-        state_changed = new_s != old_s
+        if new_state is None:
+            return
 
-        for did in _media_devices_for_entity(hass, event.data.get("entity_id")):
-            pending = hub_data["media_debounce"].pop(did, None)
-            if pending:
-                pending.cancel()
-            if state_changed:
-                # play/pause/idle/off transition - push now, reliably.
+        if (
+            old_state is None
+            or new_state.state != old_state.state                 # play/pause/idle/off
+            or _media_signature(new_state) != _media_signature(old_state)  # track/duration
+            or _is_seek(old_state, new_state)                     # seek
+        ):
+            for did in _media_devices_for_entity(hass, event.data.get("entity_id")):
                 hass.async_create_task(_push_one(did))
-            else:
-                # attribute-only change - coalesce.
-                hub_data["media_debounce"][did] = hass.loop.call_later(
-                    MEDIA_DEBOUNCE_SECONDS,
-                    lambda d=did: hass.async_create_task(_push_one(d)),
-                )
 
     @callback
     def _subscribe_states() -> None:
