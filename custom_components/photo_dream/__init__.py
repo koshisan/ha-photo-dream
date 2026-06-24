@@ -481,11 +481,44 @@ async def create_profile_devices(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     entry_type = entry.data.get("entry_type", ENTRY_TYPE_HUB)
-    
+
     if entry_type == ENTRY_TYPE_HUB:
         return await async_unload_hub_entry(hass, entry)
     else:
         return await async_unload_immich_entry(hass, entry)
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Allow deleting a device from the UI and drop it from the config.
+
+    Without this, HA reports "Config entry does not support device removal" and
+    stale/orphaned tablet devices can never be removed.
+    """
+    if config_entry.data.get("entry_type", ENTRY_TYPE_HUB) != ENTRY_TYPE_HUB:
+        # Immich profile devices are recreated from profiles - just allow removal.
+        return True
+
+    prefix = f"{config_entry.entry_id}_"
+    device_id = next(
+        (
+            ident[len(prefix):]
+            for domain, ident in device_entry.identifiers
+            if domain == DOMAIN and ident.startswith(prefix)
+        ),
+        None,
+    )
+    if device_id is None:
+        return True
+
+    devices = config_entry.data.get(CONF_DEVICES, {})
+    if device_id in devices:
+        new_devices = {k: dict(v) for k, v in devices.items() if k != device_id}
+        hass.config_entries.async_update_entry(
+            config_entry, data={**config_entry.data, CONF_DEVICES: new_devices}
+        )
+    return True
 
 
 async def async_unload_hub_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
