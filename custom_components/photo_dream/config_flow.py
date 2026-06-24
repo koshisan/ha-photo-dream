@@ -453,12 +453,14 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="no_profiles")
         
         if user_input is not None:
-            # Add device to hub
+            # Add device to hub. Deep-copy the devices map so async_update_entry
+            # detects a real change and PERSISTS it - mutating the shared dict in
+            # place makes HA see "no change", so the new device is never written
+            # to disk and its entities become orphaned after a restart.
             new_data = dict(hub_entry.data)
-            if CONF_DEVICES not in new_data:
-                new_data[CONF_DEVICES] = {}
-            
-            new_data[CONF_DEVICES][device_id] = {
+            devices = {k: dict(v) for k, v in new_data.get(CONF_DEVICES, {}).items()}
+
+            devices[device_id] = {
                 CONF_DEVICE_NAME: user_input.get(CONF_DEVICE_NAME, device_id),
                 CONF_DEVICE_IP: device_ip,
                 CONF_DEVICE_PORT: device_port,
@@ -476,8 +478,9 @@ class PhotoDreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 # Media player overlay
                 **_extract_media(user_input),
             }
-            
-            # Update hub entry
+            new_data[CONF_DEVICES] = devices
+
+            # Update hub entry (now a real change -> persisted to disk)
             self.hass.config_entries.async_update_entry(hub_entry, data=new_data)
             
             # Push config to device
