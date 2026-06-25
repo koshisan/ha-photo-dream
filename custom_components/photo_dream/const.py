@@ -78,6 +78,12 @@ CALENDAR_PUSH_INTERVAL: Final = timedelta(minutes=15)
 # Coalesce window for calendar state-change driven pushes (seconds)
 CALENDAR_DEBOUNCE_SECONDS: Final = 5
 
+# Slideshow filtering / playback (per device)
+CONF_SKIP_WRONG_ASPECT: Final = "skip_wrong_aspect"
+CONF_ALWAYS_PLAY_FULL_VIDEO: Final = "always_play_full_video"
+DEFAULT_SKIP_WRONG_ASPECT: Final = False
+DEFAULT_ALWAYS_PLAY_FULL_VIDEO: Final = False
+
 # Media player config keys
 CONF_MEDIA_MODE: Final = "media_mode"  # "off" | "compact" | "focus"
 CONF_MEDIA_PLAYER_ENTITY: Final = "media_player_entity"

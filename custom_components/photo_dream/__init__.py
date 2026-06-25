@@ -52,6 +52,10 @@ from .const import (
     CONF_MEDIA_MODE,
     CONF_MEDIA_PLAYER_ENTITY,
     CONF_FANART_API_KEY,
+    CONF_SKIP_WRONG_ASPECT,
+    CONF_ALWAYS_PLAY_FULL_VIDEO,
+    DEFAULT_SKIP_WRONG_ASPECT,
+    DEFAULT_ALWAYS_PLAY_FULL_VIDEO,
     DEFAULT_MEDIA_MODE,
     MEDIA_PUSH_INTERVAL,
     WEBHOOK_MEDIA,
@@ -917,6 +921,10 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             "interval_seconds": device.get("interval_seconds", 30),
             "pan_speed": device.get("pan_speed", 0.5),
             "mode": device.get("display_mode", "smart_shuffle"),
+            "skip_wrong_aspect": device.get(CONF_SKIP_WRONG_ASPECT, DEFAULT_SKIP_WRONG_ASPECT),
+            "always_play_full_video": device.get(
+                CONF_ALWAYS_PLAY_FULL_VIDEO, DEFAULT_ALWAYS_PLAY_FULL_VIDEO
+            ),
             "calendar": {
                 "enabled": device.get(CONF_CALENDAR, DEFAULT_CALENDAR),
                 "position": device.get(CONF_CALENDAR_POSITION, DEFAULT_CALENDAR_POSITION),

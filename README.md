@@ -49,6 +49,8 @@ For each configured tablet, the following entities are created:
 | `select.photodream_<device>_profile` | Select | Active profile selector |
 | `switch.photodream_<device>_calendar` | Switch | Toggle the calendar overlay |
 | `switch.photodream_<device>_calendar_show_location` | Switch | Show event location |
+| `switch.photodream_<device>_skip_wrong_aspect` | Switch | Only show media whose aspect ratio fits the display (~20%) |
+| `switch.photodream_<device>_always_play_full_video` | Switch | Let videos finish before advancing |
 | `select.photodream_<device>_calendar_position` | Select | Calendar overlay position |
 | `number.photodream_<device>_calendar_max_events` | Number | Max events shown |
 | `number.photodream_<device>_calendar_font_size` | Number | Calendar font size |

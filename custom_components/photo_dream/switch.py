@@ -22,6 +22,10 @@ from .const import (
     CONF_CALENDAR_SHOW_LOCATION,
     DEFAULT_CALENDAR,
     DEFAULT_CALENDAR_SHOW_LOCATION,
+    CONF_SKIP_WRONG_ASPECT,
+    CONF_ALWAYS_PLAY_FULL_VIDEO,
+    DEFAULT_SKIP_WRONG_ASPECT,
+    DEFAULT_ALWAYS_PLAY_FULL_VIDEO,
 )
 from . import push_config_to_device, get_device_data, send_command_to_device
 
@@ -47,6 +51,8 @@ async def async_setup_entry(
         entities.append(PhotoDreamWeatherSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamCalendarSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamCalendarShowLocationSwitch(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamSkipWrongAspectSwitch(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamAlwaysPlayFullVideoSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamAutoBrightnessSwitch(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
@@ -262,6 +268,80 @@ class PhotoDreamCalendarShowLocationSwitch(PhotoDreamBaseSwitch):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Hide event locations."""
         self._update_device_config(CONF_CALENDAR_SHOW_LOCATION, False)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamSkipWrongAspectSwitch(PhotoDreamBaseSwitch):
+    """Switch to only show media whose aspect ratio fits the display (~20%)."""
+
+    _attr_name = "Skip Wrong Aspect"
+    _attr_icon = "mdi:aspect-ratio"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_skip_wrong_aspect"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if wrong-aspect media is skipped."""
+        return self._get_device_config().get(
+            CONF_SKIP_WRONG_ASPECT, DEFAULT_SKIP_WRONG_ASPECT
+        )
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable aspect-ratio filtering."""
+        self._update_device_config(CONF_SKIP_WRONG_ASPECT, True)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable aspect-ratio filtering."""
+        self._update_device_config(CONF_SKIP_WRONG_ASPECT, False)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+
+class PhotoDreamAlwaysPlayFullVideoSwitch(PhotoDreamBaseSwitch):
+    """Switch to let videos finish before the slideshow advances."""
+
+    _attr_name = "Always Play Full Video"
+    _attr_icon = "mdi:play-box-multiple"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_always_play_full_video"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if videos always play to the end."""
+        return self._get_device_config().get(
+            CONF_ALWAYS_PLAY_FULL_VIDEO, DEFAULT_ALWAYS_PLAY_FULL_VIDEO
+        )
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Let videos play to the end."""
+        self._update_device_config(CONF_ALWAYS_PLAY_FULL_VIDEO, True)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Cut videos at the slide interval."""
+        self._update_device_config(CONF_ALWAYS_PLAY_FULL_VIDEO, False)
         await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
 
