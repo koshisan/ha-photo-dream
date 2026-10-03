@@ -34,6 +34,17 @@ def update_device_config(
     value: Any,
 ) -> None:
     """Persist one device setting into the hub entry that config pushes read."""
+    update_device_configs(hass, own_entry, device_id, device_config, {key: value})
+
+
+def update_device_configs(
+    hass: HomeAssistant,
+    own_entry: ConfigEntry,
+    device_id: str,
+    device_config: dict,
+    updates: dict[str, Any],
+) -> None:
+    """Persist several device settings at once (single entry update)."""
     entry = get_hub_entry(hass) or own_entry
     if entry is not own_entry:
         _LOGGER.warning(
@@ -45,11 +56,11 @@ def update_device_config(
     # dict in place makes HA see "no change" and skip the listeners.
     devices = {k: dict(v) for k, v in entry.data.get(CONF_DEVICES, {}).items()}
     devices.setdefault(device_id, dict(device_config))
-    devices[device_id][key] = value
+    devices[device_id].update(updates)
     hass.config_entries.async_update_entry(
         entry, data={**entry.data, CONF_DEVICES: devices}
     )
-    _LOGGER.debug("Set %s.%s=%r in hub entry %s", device_id, key, value, entry.entry_id)
+    _LOGGER.debug("Set %s %r in hub entry %s", device_id, updates, entry.entry_id)
 
 
 def get_device_info(

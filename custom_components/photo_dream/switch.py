@@ -7,9 +7,10 @@ from typing import Any, Callable
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .helpers import get_device_info, get_hub_entry, update_device_config
+from .helpers import get_device_info, get_hub_entry, update_device_config, update_device_configs
 
 from .const import (
     DOMAIN,
@@ -26,6 +27,10 @@ from .const import (
     CONF_ALWAYS_PLAY_FULL_VIDEO,
     DEFAULT_SKIP_WRONG_ASPECT,
     DEFAULT_ALWAYS_PLAY_FULL_VIDEO,
+    CONF_PROFILE_ID,
+    CONF_SFW,
+    CONF_SFW_PROFILE_ID,
+    CONF_SFW_PREVIOUS_PROFILE_ID,
 )
 from . import push_config_to_device, get_device_data, send_command_to_device
 
@@ -54,6 +59,7 @@ async def async_setup_entry(
         entities.append(PhotoDreamSkipWrongAspectSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamAlwaysPlayFullVideoSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamAutoBrightnessSwitch(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamSfwSwitch(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -86,6 +92,12 @@ class PhotoDreamBaseSwitch(SwitchEntity):
         """Update device config in entry data."""
         update_device_config(
             self.hass, self._entry, self._device_id, self._device_config, key, value
+        )
+
+    def _update_device_configs(self, updates: dict) -> None:
+        """Update several device settings at once."""
+        update_device_configs(
+            self.hass, self._entry, self._device_id, self._device_config, updates
         )
 
 
@@ -420,3 +432,55 @@ class PhotoDreamAutoBrightnessSwitch(SwitchEntity):
         if success:
             self._is_on = False
             self.async_write_ha_state()
+
+
+class PhotoDreamSfwSwitch(PhotoDreamBaseSwitch):
+    """SFW mode: show the device's SFW profile, restore the previous one when off."""
+
+    _attr_name = "SFW"
+    _attr_icon = "mdi:shield-check"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_sfw"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if SFW mode is active."""
+        return self._get_device_config().get(CONF_SFW, False)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Remember the current profile and switch to the SFW profile."""
+        cfg = self._get_device_config()
+        sfw_profile = cfg.get(CONF_SFW_PROFILE_ID)
+        if not sfw_profile:
+            raise ServiceValidationError(
+                f"No SFW profile set for PhotoDream {self._device_id} - choose one in 'SFW Profile' first"
+            )
+        updates = {CONF_SFW: True, CONF_PROFILE_ID: sfw_profile}
+        if not cfg.get(CONF_SFW):
+            # Only remember on the off->on edge, so repeated turn_on calls
+            # don't overwrite the real previous profile with the SFW one.
+            updates[CONF_SFW_PREVIOUS_PROFILE_ID] = cfg.get(CONF_PROFILE_ID)
+        self._update_device_configs(updates)
+        await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Restore the profile that was active before SFW mode."""
+        cfg = self._get_device_config()
+        updates = {CONF_SFW: False}
+        previous = cfg.get(CONF_SFW_PREVIOUS_PROFILE_ID)
+        if cfg.get(CONF_SFW) and previous:
+            updates[CONF_PROFILE_ID] = previous
+        self._update_device_configs(updates)
+        if CONF_PROFILE_ID in updates:
+            await push_config_to_device(self.hass, self._device_id)
+        self.async_write_ha_state()
