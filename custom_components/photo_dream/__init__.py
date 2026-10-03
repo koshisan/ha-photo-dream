@@ -11,6 +11,7 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.components import webhook
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, format_mac
@@ -19,6 +20,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 
+from .helpers import get_hub_entry
 from .const import (
     DOMAIN,
     ENTRY_TYPE_HUB,
@@ -66,6 +68,7 @@ from .const import (
     SERVICE_SET_PROFILE,
     SERVICE_NOTIFY,
     ATTR_DEVICE_ID,
+    ATTR_PROFILE,
     ATTR_PROFILE_ID,
     ATTR_MESSAGE,
     ATTR_TITLE,
@@ -778,11 +781,14 @@ async def _update_device_mac(
         _LOGGER.debug("Could not update device MAC: %s", e)
 
 
-def resolve_profile(hass: HomeAssistant, profile_id: str) -> tuple[ConfigEntry | None, str | None, dict]:
+def resolve_profile(
+    hass: HomeAssistant, profile_id: str, fallback: bool = True
+) -> tuple[ConfigEntry | None, str | None, dict]:
     """Resolve a profile_id to its Immich entry and profile config.
     
     Supports both new format (entryid_profilename) and old format (just profilename).
     Returns (immich_entry, profile_name, profile_config) or (None, None, {}) if not found.
+    With fallback=False an unknown profile_id is not replaced by the first profile.
     """
     if not profile_id:
         profile_id = ""
@@ -804,6 +810,9 @@ def resolve_profile(hass: HomeAssistant, profile_id: str) -> tuple[ConfigEntry |
                 _LOGGER.info("Resolved old-format profile '%s' to Immich entry %s", profile_id, entry.entry_id)
                 return entry, profile_name, profile_config
     
+    if not fallback:
+        return None, None, {}
+
     # If no match and we have any Immich entry, return the first profile as fallback
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.data.get("entry_type") != ENTRY_TYPE_IMMICH:
@@ -817,18 +826,19 @@ def resolve_profile(hass: HomeAssistant, profile_id: str) -> tuple[ConfigEntry |
     return None, None, {}
 
 
+def canonical_profile_id(hass: HomeAssistant, value: str | None) -> str | None:
+    """Map a profile id or bare profile name to its canonical id, or None if unknown."""
+    if not value:
+        return None
+    immich_entry, profile_name, _ = resolve_profile(hass, value, fallback=False)
+    if not immich_entry:
+        return None
+    return f"{immich_entry.entry_id}_{profile_name}".replace(" ", "_").lower()
+
+
 async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     """Get configuration for a specific device."""
-    hub_data = hass.data.get(DOMAIN, {}).get("hub")
-    if not hub_data:
-        return None
-    
-    entry_id = hub_data.get("entry_id")
-    if not entry_id:
-        return None
-    
-    # Get fresh entry from config_entries (not cached reference)
-    entry = hass.config_entries.async_get_entry(entry_id)
+    entry = get_hub_entry(hass)
     if not entry:
         return None
     
@@ -839,7 +849,10 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     device = devices[device_id]
     profile_id = device.get(CONF_PROFILE_ID, device.get("profile", ""))
     
-    _LOGGER.info("get_device_config: device=%s, profile_id='%s'", device_id, profile_id)
+    _LOGGER.info(
+        "get_device_config: device=%s, profile_id='%s' (hub entry %s)",
+        device_id, profile_id, entry.entry_id,
+    )
     
     # Resolve profile to Immich instance
     immich_entry, profile_name, profile_config = resolve_profile(hass, profile_id)
@@ -948,6 +961,11 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     }
 
 
+# Connect fails fast for offline devices; the full request may take longer
+# (weather/forecast lookups happen before, the device just has to ack).
+CONFIGURE_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=3)
+
+
 async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
     """Push configuration to a device."""
     config = await get_device_config(hass, device_id)
@@ -955,13 +973,7 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
         _LOGGER.error("No config found for device %s", device_id)
         return False
     
-    hub_data = hass.data.get(DOMAIN, {}).get("hub")
-    if not hub_data:
-        return False
-    
-    # Get fresh entry (not cached reference)
-    entry_id = hub_data.get("entry_id")
-    entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+    entry = get_hub_entry(hass)
     if not entry:
         return False
     
@@ -982,7 +994,7 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=config, timeout=10) as resp:
+            async with session.post(url, json=config, timeout=CONFIGURE_TIMEOUT) as resp:
                 if resp.status == 200:
                     _LOGGER.info("Config pushed to device %s", device_id)
                     # If the calendar overlay is enabled, push fresh events right
@@ -1001,8 +1013,8 @@ async def push_config_to_device(hass: HomeAssistant, device_id: str) -> bool:
                     return True
                 else:
                     _LOGGER.error("Failed to push config to %s: HTTP %s", device_id, resp.status)
-    except aiohttp.ClientConnectorError as e:
-        _LOGGER.error("Cannot connect to device %s at %s: %s", device_id, url, e)
+    except (aiohttp.ClientConnectorError, TimeoutError) as e:
+        _LOGGER.error("Cannot connect to device %s at %s: %s", device_id, url, e or "timeout")
     except Exception as e:
         _LOGGER.error("Error pushing config to %s: %s", device_id, e)
     
@@ -1025,23 +1037,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_set_profile(call: ServiceCall) -> None:
         """Handle set_profile service call."""
         device_id = call.data.get(ATTR_DEVICE_ID)
-        profile_id = call.data.get(ATTR_PROFILE_ID)
-        
-        hub_data = hass.data.get(DOMAIN, {}).get("hub")
-        if not hub_data:
-            return
-        
-        entry = hub_data.get("entry")
-        if not entry:
-            return
-        
-        devices = dict(entry.data.get(CONF_DEVICES, {}))
-        if device_id in devices:
-            devices[device_id] = {**devices[device_id], CONF_PROFILE_ID: profile_id}
-            new_data = dict(entry.data)
-            new_data[CONF_DEVICES] = devices
-            hass.config_entries.async_update_entry(entry, data=new_data)
-            await push_config_to_device(hass, device_id)
+        # services.yaml documents the field as `profile` (id or name);
+        # `profile_id` is accepted for backwards compatibility.
+        requested = call.data.get(ATTR_PROFILE) or call.data.get(ATTR_PROFILE_ID)
+        profile_id = canonical_profile_id(hass, requested)
+        if not profile_id:
+            raise ServiceValidationError(f"Unknown PhotoDream profile '{requested}'")
+
+        entry = get_hub_entry(hass)
+        if not entry or device_id not in entry.data.get(CONF_DEVICES, {}):
+            raise ServiceValidationError(f"Unknown PhotoDream device '{device_id}'")
+
+        # Deep-copy so async_update_entry sees a real change and persists it.
+        devices = {k: dict(v) for k, v in entry.data[CONF_DEVICES].items()}
+        devices[device_id][CONF_PROFILE_ID] = profile_id
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_DEVICES: devices}
+        )
+        _LOGGER.info("set_profile: device=%s -> %s", device_id, profile_id)
+        await push_config_to_device(hass, device_id)
     
     async def handle_notify(call: ServiceCall) -> None:
         """Handle notify service call - show a popup overlay on a device."""
