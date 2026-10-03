@@ -8,7 +8,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from .helpers import get_device_info, get_hub_entry, update_device_config
+from .helpers import get_device_info, get_hub_entry, update_device_config, update_device_configs
 
 from .const import (
     DOMAIN,
@@ -17,6 +17,8 @@ from .const import (
     CONF_DEVICES,
     CONF_PROFILES,
     CONF_PROFILE_ID,
+    CONF_SFW,
+    CONF_SFW_PROFILE_ID,
     CONF_IMMICH_NAME,
     CONF_CLOCK_POSITION,
     CONF_CLOCK_FORMAT,
@@ -69,6 +71,7 @@ async def async_setup_entry(
     entities = []
     for device_id, device_config in devices.items():
         entities.append(PhotoDreamProfileSelect(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamSfwProfileSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamClockPositionSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamClockFormatSelect(hass, entry, device_id, device_config))
         entities.append(PhotoDreamDateFormatSelect(hass, entry, device_id, device_config))
@@ -116,6 +119,12 @@ class PhotoDreamBaseSelect(SelectEntity):
         """Update device config in entry data."""
         update_device_config(
             self.hass, self._entry, self._device_id, self._device_config, key, value
+        )
+
+    def _update_device_configs(self, updates: dict) -> None:
+        """Update several device settings at once."""
+        update_device_configs(
+            self.hass, self._entry, self._device_id, self._device_config, updates
         )
 
     async def async_added_to_hass(self) -> None:
@@ -198,8 +207,13 @@ class PhotoDreamProfileSelect(PhotoDreamBaseSelect):
         
         _LOGGER.info("Setting profile to %s (%s) for device %s", option, profile_id, self._device_id)
         
-        # Update config entry
-        self._update_device_config(CONF_PROFILE_ID, profile_id)
+        # Update config entry. Picking another profile by hand ends SFW mode,
+        # so turning the SFW switch off later doesn't overwrite this choice.
+        updates = {CONF_PROFILE_ID: profile_id}
+        cfg = self._get_device_config()
+        if cfg.get(CONF_SFW) and profile_id != cfg.get(CONF_SFW_PROFILE_ID):
+            updates[CONF_SFW] = False
+        self._update_device_configs(updates)
         
         # Small delay to ensure entry is updated before push
         import asyncio
@@ -209,6 +223,54 @@ class PhotoDreamProfileSelect(PhotoDreamBaseSelect):
         result = await push_config_to_device(self.hass, self._device_id)
         _LOGGER.info("Config push result for %s: %s", self._device_id, result)
         
+        self.async_write_ha_state()
+
+
+class PhotoDreamSfwProfileSelect(PhotoDreamBaseSelect):
+    """Select entity for the profile the SFW switch activates."""
+
+    _attr_name = "SFW Profile"
+    _attr_icon = "mdi:shield-check-outline"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the select entity."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_sfw_profile"
+
+    @property
+    def options(self) -> list[str]:
+        """Return all profiles from all Immich instances."""
+        return list(get_all_profiles(self.hass).values()) or ["No profiles configured"]
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the configured SFW profile, if any."""
+        return get_all_profiles(self.hass).get(
+            self._get_device_config().get(CONF_SFW_PROFILE_ID)
+        )
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the SFW profile; applies immediately while SFW mode is on."""
+        profile_id = next(
+            (pid for pid, display in get_all_profiles(self.hass).items() if display == option),
+            None,
+        )
+        if not profile_id:
+            _LOGGER.error("Could not find profile_id for SFW option: %s", option)
+            return
+        updates = {CONF_SFW_PROFILE_ID: profile_id}
+        sfw_on = self._get_device_config().get(CONF_SFW)
+        if sfw_on:
+            updates[CONF_PROFILE_ID] = profile_id
+        self._update_device_configs(updates)
+        if sfw_on:
+            await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
 
 

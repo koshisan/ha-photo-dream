@@ -84,6 +84,11 @@ CONF_ALWAYS_PLAY_FULL_VIDEO: Final = "always_play_full_video"
 DEFAULT_SKIP_WRONG_ASPECT: Final = False
 DEFAULT_ALWAYS_PLAY_FULL_VIDEO: Final = False
 
+# SFW mode (per device): switch to a chosen profile, restore the previous one when off
+CONF_SFW: Final = "sfw"
+CONF_SFW_PROFILE_ID: Final = "sfw_profile_id"
+CONF_SFW_PREVIOUS_PROFILE_ID: Final = "sfw_previous_profile_id"
+
 # Media player config keys
 CONF_MEDIA_MODE: Final = "media_mode"  # "off" | "compact" | "focus"
 CONF_MEDIA_PLAYER_ENTITY: Final = "media_player_entity"

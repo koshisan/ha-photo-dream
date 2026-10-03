@@ -34,6 +34,8 @@ from .const import (
     CONF_DEVICE_IP,
     CONF_DEVICE_PORT,
     CONF_PROFILE_ID,
+    CONF_SFW,
+    CONF_SFW_PROFILE_ID,
     CONF_SEARCH_FILTER,
     CONF_EXCLUDE_PATHS,
     CONF_MEDIA_TYPE,
@@ -1051,6 +1053,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         # Deep-copy so async_update_entry sees a real change and persists it.
         devices = {k: dict(v) for k, v in entry.data[CONF_DEVICES].items()}
         devices[device_id][CONF_PROFILE_ID] = profile_id
+        # An explicit profile change ends SFW mode (unless it IS the SFW profile).
+        if profile_id != devices[device_id].get(CONF_SFW_PROFILE_ID):
+            devices[device_id][CONF_SFW] = False
         hass.config_entries.async_update_entry(
             entry, data={**entry.data, CONF_DEVICES: devices}
         )
