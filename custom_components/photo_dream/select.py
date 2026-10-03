@@ -8,7 +8,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from .helpers import get_device_info
+from .helpers import get_device_info, get_hub_entry, update_device_config
 
 from .const import (
     DOMAIN,
@@ -109,19 +109,14 @@ class PhotoDreamBaseSelect(SelectEntity):
 
     def _get_device_config(self) -> dict:
         """Get device config from entry data."""
-        return self._entry.data.get(CONF_DEVICES, {}).get(self._device_id, {})
+        entry = get_hub_entry(self.hass) or self._entry
+        return entry.data.get(CONF_DEVICES, {}).get(self._device_id, {})
 
     def _update_device_config(self, key: str, value) -> None:
         """Update device config in entry data."""
-        new_data = dict(self._entry.data)
-        # Deep-copy the devices map so async_update_entry detects a real change
-        # and fires update listeners (re-subscriptions). Mutating the shared
-        # dict in place makes HA see "no change" and skip the listeners.
-        devices = {k: dict(v) for k, v in new_data.get(CONF_DEVICES, {}).items()}
-        devices.setdefault(self._device_id, dict(self._device_config))
-        devices[self._device_id][key] = value
-        new_data[CONF_DEVICES] = devices
-        self.hass.config_entries.async_update_entry(self._entry, data=new_data)
+        update_device_config(
+            self.hass, self._entry, self._device_id, self._device_config, key, value
+        )
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
