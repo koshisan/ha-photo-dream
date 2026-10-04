@@ -21,6 +21,8 @@ from .const import (
     CONF_IMMICH_API_KEY,
     CONF_PROFILES,
     CONF_SEARCH_FILTER,
+    CONF_PROFILE_SOURCE,
+    SOURCE_FLICKR,
     CONF_EXCLUDE_PATHS,
     CONF_MEDIA_TYPE,
     DEFAULT_MEDIA_TYPE,
@@ -67,6 +69,8 @@ class ImmichCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         counts_changed = False
         
         for profile_name, profile_config in profiles.items():
+            if profile_config.get(CONF_PROFILE_SOURCE) == SOURCE_FLICKR:
+                continue  # not in Immich - nothing to count
             raw_filter = profile_config.get(CONF_SEARCH_FILTER, {})
             search_filter = parse_immich_url(raw_filter)
             exclude_paths = profile_config.get(CONF_EXCLUDE_PATHS, [])

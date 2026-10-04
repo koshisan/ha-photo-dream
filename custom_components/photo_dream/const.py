@@ -42,6 +42,13 @@ CONF_PROFILE_ID: Final = "profile_id"
 CONF_SEARCH_FILTER: Final = "search_filter"
 CONF_EXCLUDE_PATHS: Final = "exclude_paths"
 CONF_MEDIA_TYPE: Final = "media_type"
+CONF_PROFILE_SOURCE: Final = "source"
+CONF_FLICKR_API_KEY: Final = "flickr_api_key"
+
+# Profile sources: Immich search, or Flickr free-text search (search term = query)
+SOURCE_IMMICH: Final = "immich"
+SOURCE_FLICKR: Final = "flickr"
+PROFILE_SOURCES: Final = {SOURCE_IMMICH: "Immich", SOURCE_FLICKR: "Flickr (search term)"}
 
 # Calendar config keys (per device)
 CONF_CALENDAR: Final = "calendar"  # overlay enabled (bool)

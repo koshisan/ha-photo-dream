@@ -14,9 +14,13 @@
         "description": "Create a photo filter profile. You can add more profiles later in the integration options.\n\nProfiles created: {profile_count}\n\nTip: Build your search in Immich UI, then copy the URL or JSON query.",
         "data": {
           "name": "Profile Name",
-          "search_filter": "Immich Search (URL, JSON, or simple query)",
+          "search_filter": "Immich Search (URL, JSON, or simple query) / Flickr search term",
           "exclude_paths": "Exclude Paths (comma-separated)",
-          "add_another": "Add another profile"
+          "add_another": "Add another profile",
+          "source": "Source"
+        },
+        "data_description": {
+          "search_filter": "Immich: URL, JSON or simple query. Flickr: free search term (e.g. \"puppies\"), SafeSearch is always on. Exclude paths and media type are ignored for Flickr."
         }
       },
       "discovery_confirm": {
@@ -73,8 +77,12 @@
         "description": "Tip: Build your search in Immich UI, then copy the URL.",
         "data": {
           "name": "Profile Name",
-          "search_filter": "Immich Search (URL, JSON, or simple query)",
-          "exclude_paths": "Exclude Paths (comma-separated)"
+          "search_filter": "Immich Search (URL, JSON, or simple query) / Flickr search term",
+          "exclude_paths": "Exclude Paths (comma-separated)",
+          "source": "Source"
+        },
+        "data_description": {
+          "search_filter": "Immich: URL, JSON or simple query. Flickr: free search term (e.g. \"puppies\"), SafeSearch is always on. Exclude paths and media type are ignored for Flickr."
         }
       },
       "select_profile_edit": {
@@ -86,8 +94,12 @@
       "edit_profile": {
         "title": "Edit Profile: {profile_name}",
         "data": {
-          "search_filter": "Immich Search (URL, JSON, or simple query)",
-          "exclude_paths": "Exclude Paths (comma-separated)"
+          "search_filter": "Immich Search (URL, JSON, or simple query) / Flickr search term",
+          "exclude_paths": "Exclude Paths (comma-separated)",
+          "source": "Source"
+        },
+        "data_description": {
+          "search_filter": "Immich: URL, JSON or simple query. Flickr: free search term (e.g. \"puppies\"), SafeSearch is always on. Exclude paths and media type are ignored for Flickr."
         }
       },
       "select_profile_delete": {
@@ -149,9 +161,16 @@
         "title": "Immich Settings",
         "data": {
           "immich_url": "Immich URL",
-          "immich_api_key": "Immich API Key"
+          "immich_api_key": "Immich API Key",
+          "flickr_api_key": "Flickr API Key (optional)"
+        },
+        "data_description": {
+          "flickr_api_key": "Needed for Flickr profiles. Get a free key at https://www.flickr.com/services/apps/create/"
         }
       }
+    },
+    "error": {
+      "invalid_flickr_key": "Flickr rejected this API key"
     }
   }
 }

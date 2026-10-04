@@ -22,6 +22,10 @@ from homeassistant.helpers.event import (
 
 from .helpers import get_hub_entry, update_device_configs
 from .const import (
+    CONF_PROFILE_SOURCE,
+    CONF_FLICKR_API_KEY,
+    SOURCE_FLICKR,
+    SOURCE_IMMICH,
     DOMAIN,
     ENTRY_TYPE_HUB,
     ENTRY_TYPE_IMMICH,
@@ -942,12 +946,19 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
     
     _LOGGER.info("Config for %s: profile_id='%s', profile_name='%s'", device_id, profile_id, profile_name)
     
+    is_flickr = profile_config.get(CONF_PROFILE_SOURCE) == SOURCE_FLICKR
+    if is_flickr and not immich_entry.data.get(CONF_FLICKR_API_KEY):
+        _LOGGER.error("Profile %s uses Flickr but no Flickr API key is set", profile_name)
+
     return {
         "device_id": device_id,
+        # Blank for Flickr profiles: an app that doesn't know Flickr must not
+        # fall back to showing the Immich library (SFW safety)
         "immich": {
-            "base_url": immich_entry.data.get(CONF_IMMICH_URL, ""),
-            "api_key": immich_entry.data.get(CONF_IMMICH_API_KEY, ""),
+            "base_url": "" if is_flickr else immich_entry.data.get(CONF_IMMICH_URL, ""),
+            "api_key": "" if is_flickr else immich_entry.data.get(CONF_IMMICH_API_KEY, ""),
         },
+        "flickr": {"api_key": immich_entry.data.get(CONF_FLICKR_API_KEY, "")} if is_flickr else None,
         "display": {
             "clock": device.get("clock", True),
             "clock_position": device.get("clock_position", 3),
@@ -981,6 +992,7 @@ async def get_device_config(hass: HomeAssistant, device_id: str) -> dict | None:
             "search_filter": parse_immich_url(profile_config.get(CONF_SEARCH_FILTER, {})),
             "exclude_paths": profile_config.get(CONF_EXCLUDE_PATHS, []),
             "media_type": profile_config.get(CONF_MEDIA_TYPE, DEFAULT_MEDIA_TYPE),
+            "source": SOURCE_FLICKR if is_flickr else SOURCE_IMMICH,
         },
         "webhook_url": status_webhook_url,
     }
