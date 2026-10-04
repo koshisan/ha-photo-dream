@@ -20,7 +20,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 
-from .helpers import get_hub_entry
+from .helpers import get_hub_entry, update_device_configs
 from .const import (
     DOMAIN,
     ENTRY_TYPE_HUB,
@@ -707,6 +707,10 @@ async def handle_status_webhook(
                 "app_version": data.get("app_version"),
             }
             
+            # Follow DHCP changes: config pushes and commands use the IP stored at
+            # setup, so a device whose IP changed would silently stop receiving them.
+            await _update_device_ip(hass, device_id, data.get("ip_address"))
+
             # Update device registry with MAC address
             mac_address = data.get("mac_address")
             if mac_address:
@@ -755,6 +759,25 @@ async def handle_key_event_webhook(
     except Exception as e:
         _LOGGER.error("Error handling key event webhook: %s", e)
         return aiohttp.web.Response(status=500, text=str(e))
+
+
+async def _update_device_ip(
+    hass: HomeAssistant, device_id: str, ip_address: str | None
+) -> None:
+    """Store a device's new IP (reported via status webhook) and re-push its config."""
+    entry = get_hub_entry(hass)
+    if not ip_address or not entry:
+        return
+    device_config = entry.data.get(CONF_DEVICES, {}).get(device_id)
+    if not device_config or device_config.get(CONF_DEVICE_IP) == ip_address:
+        return
+    _LOGGER.warning(
+        "Device %s changed IP %s -> %s, updating",
+        device_id, device_config.get(CONF_DEVICE_IP), ip_address,
+    )
+    update_device_configs(hass, entry, device_id, device_config, {CONF_DEVICE_IP: ip_address})
+    # The device missed every push since the change - bring it up to date
+    hass.async_create_task(push_config_to_device(hass, device_id))
 
 
 async def _update_device_mac(
