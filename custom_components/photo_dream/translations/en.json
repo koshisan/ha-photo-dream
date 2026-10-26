@@ -172,5 +172,12 @@
     "error": {
       "invalid_flickr_key": "Flickr rejected this API key"
     }
+  },
+  "entity": {
+    "switch": {
+      "screen": {
+        "name": "Screen"
+      }
+    }
   }
 }

@@ -6,8 +6,8 @@ from typing import Any, Callable
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .helpers import get_device_info, get_hub_entry, update_device_config, update_device_configs
@@ -60,6 +60,7 @@ async def async_setup_entry(
         entities.append(PhotoDreamAlwaysPlayFullVideoSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamAutoBrightnessSwitch(hass, entry, device_id, device_config))
         entities.append(PhotoDreamSfwSwitch(hass, entry, device_id, device_config))
+        entities.append(PhotoDreamScreenSwitch(hass, entry, device_id, device_config))
     
     async_add_entities(entities)
 
@@ -484,3 +485,102 @@ class PhotoDreamSfwSwitch(PhotoDreamBaseSwitch):
         if CONF_PROFILE_ID in updates:
             await push_config_to_device(self.hass, self._device_id)
         self.async_write_ha_state()
+
+
+class PhotoDreamScreenSwitch(PhotoDreamBaseSwitch):
+    """Turn the tablet screen off/on; the device stays awake and reachable while off.
+
+    Needs PhotoDream 1.9.7+ with device admin (off) and, on Android 14+, the
+    "Turn screen on" special access (on) granted on the tablet.
+
+    State comes from the device: the status webhook carries screen_on (pushed right
+    away on every change, also when the screen is woken by a tap), plus one GET
+    /screen when the entity is added. Unavailable on app versions without /screen.
+    """
+
+    _attr_translation_key = "screen"
+    _attr_icon = "mdi:tablet"
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device_id: str,
+        device_config: dict,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(hass, entry, device_id, device_config)
+        self._attr_unique_id = f"{entry.entry_id}_{device_id}_screen"
+        self._is_on: bool | None = None
+        self._screen: dict = {}
+
+    async def async_added_to_hass(self) -> None:
+        """Listen for status webhooks and fetch the initial state."""
+        hub_data = self.hass.data.get(DOMAIN, {}).get("hub") or {}
+        self._is_on = (hub_data.get("devices", {}).get(self._device_id) or {}).get("screen_on")
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                f"{DOMAIN}_device_update", self._handle_device_update
+            )
+        )
+        self.hass.async_create_task(self._async_refresh())
+
+    @callback
+    def _handle_device_update(self, event) -> None:
+        """Take screen_on from the device's status webhook."""
+        if event.data.get("device_id") != self._device_id:
+            return
+        screen_on = (event.data.get("data") or {}).get("screen_on")
+        if screen_on is not None and screen_on != self._is_on:
+            self._is_on = screen_on
+            self.async_write_ha_state()
+
+    async def _async_refresh(self) -> None:
+        """Read the screen state from the device."""
+        data = await get_device_data(self.hass, self._device_id, "screen")
+        if data and "screen_on" in data:
+            self._screen = data
+            self._is_on = data["screen_on"]
+            self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Manual refresh (homeassistant.update_entity)."""
+        await self._async_refresh()
+
+    @property
+    def available(self) -> bool:
+        """Unavailable until the device reported a screen state (needs app 1.9.7+)."""
+        return self._is_on is not None
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the screen is on."""
+        return self._is_on
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Whether the tablet granted what's needed to switch the screen off/on."""
+        return {
+            "can_turn_off": self._screen.get("can_turn_off"),
+            "can_turn_on": self._screen.get("can_turn_on"),
+        }
+
+    async def _async_set(self, on: bool) -> None:
+        if not await send_command_to_device(self.hass, self._device_id, "screen", {"on": on}):
+            await self._async_refresh()
+            raise HomeAssistantError(
+                f"PhotoDream {self._device_id} refused the screen command - on the tablet, "
+                "allow 'Screen Off from HA' in the PhotoDream settings (device admin and, "
+                "on Android 14+, 'Turn screen on')"
+            )
+        self._is_on = on
+        self.async_write_ha_state()
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the screen on."""
+        await self._async_set(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the screen off (device stays awake and reachable)."""
+        await self._async_set(False)

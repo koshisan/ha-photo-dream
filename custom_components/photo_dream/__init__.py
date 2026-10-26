@@ -709,6 +709,8 @@ async def handle_status_webhook(
                 "display_width": data.get("display_width"),
                 "display_height": data.get("display_height"),
                 "app_version": data.get("app_version"),
+                # None for app versions without screen on/off (< 1.9.7)
+                "screen_on": data.get("screen_on"),
             }
             
             # Follow DHCP changes: config pushes and commands use the IP stored at
