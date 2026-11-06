@@ -97,7 +97,7 @@ CONF_SFW_PROFILE_ID: Final = "sfw_profile_id"
 CONF_SFW_PREVIOUS_PROFILE_ID: Final = "sfw_previous_profile_id"
 
 # Media player config keys
-CONF_MEDIA_MODE: Final = "media_mode"  # "off" | "compact" | "focus"
+CONF_MEDIA_MODE: Final = "media_mode"  # "off" | "compact" | "focus" | "corner"
 CONF_MEDIA_PLAYER_ENTITY: Final = "media_player_entity"
 CONF_FANART_API_KEY: Final = "fanart_api_key"  # hub-level, optional (focus HD art)
 
@@ -107,6 +107,7 @@ MEDIA_MODES: Final = {
     "off": "Off",
     "compact": "Compact card",
     "focus": "Focus (full cover)",
+    "corner": "Corner (for video)",
 }
 
 # How often the now-playing state is pushed while a player is playing (position)
