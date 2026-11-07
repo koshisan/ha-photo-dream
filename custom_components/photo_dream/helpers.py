@@ -92,7 +92,7 @@ def get_device_info(
     
     return DeviceInfo(
         identifiers={(DOMAIN, f"{entry.entry_id}_{device_id}")},
-        connections=connections if connections else None,
+        connections=connections,  # HA 2026.11 rejects None here
         name=f"PhotoDream {device_name}",
         manufacturer="PhotoDream",
         model="Android Tablet",
